@@ -1,26 +1,10 @@
 # Dominik Habersack's Dot Files
 
-This collection contains customizations of several command-line applications.
+This collection contains customizations of several command-line utilities.
 
 ## Contents
 
-### gitconfig
-
-Mainly activates colors for the various git-commands.
-
-
-### tmux.conf
-
-
-### vimrc
-
-
-### zshrc
-
-#### Aliases
-
-`ga`: git add
-`gc`: git commit
-`gl`: git log using custom alias
-`gst`: git status
-
+* gitconfig - aliases, colors
+* tmux.conf - remapped prefix, status bar, better highlighting of active pane
+* vimrc - highlighting, line numbers, coloring, gutter, soft tabs
+* zshrc - aliases, colors, functions, prompt with git- and rbenv-information

@@ -40,4 +40,3 @@ set hlsearch
 
 " not entirely sure what this does
 filetype plugin indent on
-
