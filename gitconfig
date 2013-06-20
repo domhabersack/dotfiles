@@ -1,5 +1,5 @@
 [alias]
-  llog = log --all --graph --pretty=format:'%C(yellow)%h%Cred%d %Cgreen%ad (%ar) %Creset[%C(cyan)%an%Creset]%n        %s'
+  llog = log --all --graph --date=local --pretty=format:'%C(yellow)%h%Cred%d %Cgreen%ad (%ar) %Creset[%C(cyan)%an%Creset]%n        %s'
 [color]
   ui = true
 [color "branch"]
