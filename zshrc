@@ -162,5 +162,6 @@ alias ls='ls -G'
 # git
 alias ga='git add'
 alias gc='git commit'
+alias gco='git checkout'
 alias gl='git llog'
 alias gst='git status -s'
