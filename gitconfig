@@ -21,3 +21,5 @@
 [user]
   email = dhabersack@gmail.com
   name = Dominik Habersack
+[push]
+  default = simple
