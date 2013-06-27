@@ -16,10 +16,12 @@
 [color "status"]
   branch = yellow
   changed = yellow
+[core]
+  excludesfile = ~/.gitignore_global
 [credential]
   helper = osxkeychain
+[push]
+  default = simple
 [user]
   email = dhabersack@gmail.com
   name = Dominik Habersack
-[push]
-  default = simple
