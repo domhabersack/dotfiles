@@ -1,9 +1,12 @@
 " load pathogen
 execute pathogen#infect()
 
-"###############################
+" use vim-settings rather then vi-settings
+set nocompatible
+
+""""""""""""""""""""""""""""""""
 " Colors and text
-"###############################
+""""""""""""""""""""""""""""""""
 
 " syntax highlighting
 syntax enable
@@ -30,6 +33,9 @@ set colorcolumn=81
 set expandtab
 set shiftwidth=2
 set softtabstop=2
+
+" always use autoindenting
+set autoindent
 
 " highlight unwanted whitespace
 highlight ExtraWhitespace ctermbg=red
