@@ -39,7 +39,8 @@ set autoindent
 
 " highlight unwanted whitespace
 highlight ExtraWhitespace ctermbg=red
-match ExtraWhitespace /\s\+$\| \+\ze\t/
+"match ExtraWhitespace /\s\+$\| \+\ze\t/
+match ExtraWhitespace /\s\+$\|\t/
 
 " highlight search results
 set hlsearch
