@@ -45,5 +45,8 @@ autocmd Syntax * syn match ExtraWhitespace /\s\+\%#\@<!$\| \+\ze\t/
 " highlight search results
 set hlsearch
 
+" case-insensitive search
+set ignorecase
+
 " not entirely sure what this does
 filetype plugin indent on
