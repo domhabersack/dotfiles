@@ -37,6 +37,10 @@ set softtabstop=2
 " always use autoindenting
 set autoindent
 
+" show invisibles
+set list
+set listchars=tab:▸\ ,eol:¬
+
 " highlight unwanted whitespace
 highlight ExtraWhitespace ctermbg=red
 match ExtraWhitespace /\s\+\%#\@<!$\| \+\ze\t/
