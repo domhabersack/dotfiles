@@ -54,3 +54,11 @@ set ignorecase
 
 " not entirely sure what this does
 filetype plugin indent on
+
+
+""""""""""""""""""""""""""""""""
+" Mappings
+""""""""""""""""""""""""""""""""
+
+" toggle `set list`
+nmap <leader>l :set list!<CR>
