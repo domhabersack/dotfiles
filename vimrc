@@ -63,6 +63,24 @@ filetype plugin indent on
 " do not auto-insert comments
 autocmd FileType * setlocal formatoptions-=c formatoptions-=r formatoptions-=o
 
+" color status bar when in insert mode
+function! InsertStatuslineColor(mode)
+  if a:mode == 'i'
+    hi statusline ctermfg=DarkGreen ctermbg=Black
+  elseif a:mode == 'r'
+    hi statusline ctermfg=DarkRed ctermbg=White
+  else
+    hi statusline ctermfg=Yellow ctermbg=Black
+  endif
+endfunction
+
+au InsertEnter * call InsertStatuslineColor(v:insertmode)
+au InsertChange * call InsertStatuslineColor(v:insertmode)
+au InsertLeave * hi statusline ctermfg=Gray ctermbg=Black
+
+" default statusline
+hi statusline ctermfg=Gray ctermbg=Black
+
 
 """"""""""""""""""""""""""""""""
 " Mappings
