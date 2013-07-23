@@ -92,3 +92,6 @@ nmap <leader>l :set list!<CR>
 " FuzzyFinder
 noremap <silent> <C-t> :FufCoverageFile<CR>
 noremap <silent> <C-r> :FufRenewCache<CR> " reload cache
+
+" NERDTree
+map <C-n> :NERDTreeToggle<CR>
