@@ -3,7 +3,7 @@
 ################
 
 export NODE_PATH=/usr/local/lib/node_modules
-export PATH=/usr/local/share/npm/bin:/opt/local/bin:/opt/local/sbin:/opt/usr/sbin:/usr/local/bin:/usr/local/git/bin:$PATH
+export PATH=/usr/local/share/npm/bin:/opt/local/bin:/opt/local/sbin:/opt/usr/sbin:/usr/local/bin:/usr/local/git/bin:/usr/local/opt/coreutils/libexec/gnubin:$PATH
 
 ################
 # RBENV        #
@@ -169,3 +169,6 @@ alias gl='git llog'
 alias gm='git merge'
 alias gr='git rm'
 alias gst='git status -s'
+
+# do not allow scripts to automatically delete things for you
+alias rm='rm -i'
