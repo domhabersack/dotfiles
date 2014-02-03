@@ -29,6 +29,9 @@ set ruler
 " show gutter after column 80
 set colorcolumn=81
 
+" highlight current line
+set cursorline
+
 " soft tabs
 set expandtab
 set shiftwidth=2
@@ -83,15 +86,32 @@ hi statusline ctermfg=Gray ctermbg=Black
 
 
 """"""""""""""""""""""""""""""""
-" Mappings
+" CtrlP
+""""""""""""""""""""""""""""""""
+
+let ctrlp_exclude_directories = '\.(hg|git|bzr)|bower_components|node_modules|vendor'
+let g:ctrlp_custom_ignore = '\v[\/](' . ctrlp_exclude_directories . ')$'
+
+
+""""""""""""""""""""""""""""""""
+" NERDTree
+""""""""""""""""""""""""""""""""
+
+let g:ctrlp_dont_split = 'nerdtree'
+map <C-n> :NERDTreeToggle<CR>
+
+
+""""""""""""""""""""""""""""""""
+" numbers.vim
+""""""""""""""""""""""""""""""""
+
+let g:numbers_exclude = ['nerdtree']
+nnoremap <F3> :NumbersToggle<CR>
+
+
+""""""""""""""""""""""""""""""""
+" Other mappings
 """"""""""""""""""""""""""""""""
 
 " toggle `set list`
 nmap <leader>l :set list!<CR>
-
-" FuzzyFinder
-noremap <silent> <C-t> :FufCoverageFile<CR>
-noremap <silent> <C-r> :FufRenewCache<CR> " reload cache
-
-" NERDTree
-map <C-n> :NERDTreeToggle<CR>
