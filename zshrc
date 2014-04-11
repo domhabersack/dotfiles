@@ -2,11 +2,12 @@
 # EXPORTS      #
 ################
 
-export NODE_PATH=/usr/local/lib/node_modules
+export NODE_PATH=/usr/local/share/npm/lib/node_modules
 export PATH=/usr/local/share/npm/bin:/opt/local/bin:/opt/local/sbin:/opt/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/local/git/bin:/usr/local/opt/coreutils/libexec/gnubin:$PATH
 
 # Android-SDK
 export ANDROID_HOME=/usr/local/opt/android-sdk
+export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
 
 ################
 # RBENV        #
