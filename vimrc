@@ -99,9 +99,6 @@ inoremap <expr> <C-n> pumvisible() ? '<C-n>' : '<C-n><C-r>=pumvisible() ? "\<lt>
 hi Pmenu ctermbg=DarkGray ctermfg=Black
 hi PmenuSel ctermbg=Black ctermfg=Green
 
-" add dash as delimiter (for CSS)
-set iskeyword+=-
-
 
 """"""""""""""""""""""""""""""""
 " CtrlP
