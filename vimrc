@@ -86,6 +86,24 @@ hi statusline ctermfg=Gray ctermbg=Black
 
 
 """"""""""""""""""""""""""""""""
+" Autocomplete
+""""""""""""""""""""""""""""""""
+
+" only insert longest common text of matches, show popup even when there is only one match
+set completeopt=longest,menuone
+
+" always select first element in popup
+inoremap <expr> <C-n> pumvisible() ? '<C-n>' : '<C-n><C-r>=pumvisible() ? "\<lt>Down>" : ""<CR>'
+
+" change colors of popup
+hi Pmenu ctermbg=DarkGray ctermfg=Black
+hi PmenuSel ctermbg=Black ctermfg=Green
+
+" add dash as delimiter (for CSS)
+set iskeyword+=-
+
+
+""""""""""""""""""""""""""""""""
 " CtrlP
 """"""""""""""""""""""""""""""""
 
