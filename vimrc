@@ -86,6 +86,8 @@ au InsertLeave * hi statusline ctermfg=Gray ctermbg=Black
 " default statusline
 hi statusline ctermfg=Gray ctermbg=Black
 
+" preserve indentation while pasting text from OS X clipboard
+noremap <leader>p :set paste<CR>:put  *<CR>:set nopaste<CR>
 
 """"""""""""""""""""""""""""""""
 " Autocomplete
