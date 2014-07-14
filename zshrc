@@ -173,6 +173,9 @@ alias gd='git diff'
 alias gl='git llog'
 alias gm='git merge'
 alias gr='git rm'
+alias grb='git rebase'
+alias grbc='git add . && git rebase --continue'
+alias grbs='git rebase --skip'
 alias gst='git status -s'
 
 # do not allow scripts to automatically delete things for you
