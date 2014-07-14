@@ -17,8 +17,10 @@ set laststatus=2
 " color scheme
 set t_Co=256
 set background=dark
-let g:solarized_termcolors=256
 colorscheme solarized
+
+" toggle background with key
+call togglebg#map("<F5>")
 
 " line numbers
 set number
