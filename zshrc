@@ -137,7 +137,7 @@ rbenv_prompt_string() {
 }
 
 # set left-hand prompt
-PS1='%{$fg[cyan]%}%~%{$fg[green]%}%#%{$reset_color%} '
+PS1='%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
 
 # set right-hand prompt
 RPS1='$(git_prompt_string)$(rbenv_prompt_string)'
@@ -180,3 +180,6 @@ alias gst='git status -s'
 
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
+
+# tmux
+alias tmuxinit='~/.tmux/environments/default'

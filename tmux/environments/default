@@ -1,0 +1,21 @@
+# rename window to name of current directory
+tmux rename-window `echo ${PWD##*/}`
+
+# split window vertically and show git status
+tmux split-window -h
+
+# split right panel horizontally
+tmux split-window -v -t 2
+
+# resize and select editor-pane
+tmux resize-pane -x 84 -t 1
+tmux select-pane -t 1
+
+# open vim in editor-pane
+tmux send-keys -t 1 'vim .' C-m
+
+# resize git-pane
+tmux resize-pane -y 16 -t 2
+
+# show git status in git-pane
+tmux send-keys -t 2 'gst' C-m
