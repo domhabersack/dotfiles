@@ -181,5 +181,8 @@ alias gst='git status -s'
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
 
+# SVN
+alias svn='colorsvn'
+
 # tmux
 alias tmuxinit='~/.tmux/environments/default'
