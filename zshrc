@@ -152,6 +152,11 @@ md() {
   mkdir -p "$@" && cd "$@"
 }
 
+svndiff() {
+  svn diff "${@}" | colordiff
+}
+
+
 
 ################
 # ALIASES      #
@@ -183,6 +188,9 @@ alias rm='rm -i'
 
 # SVN
 alias svn='colorsvn'
+alias sst='svn status'
+alias sc='svn commit'
+alias sd='svndiff'
 
 # tmux
 alias tmuxinit='~/.tmux/environments/default'
