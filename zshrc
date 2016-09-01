@@ -152,6 +152,11 @@ md() {
   mkdir -p "$@" && cd "$@"
 }
 
+svndiff() {
+  svn diff "${@}" | colordiff
+}
+
+
 
 ################
 # ALIASES      #
@@ -180,6 +185,12 @@ alias gst='git status -s'
 
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
+
+# SVN
+alias svn='colorsvn'
+alias sst='svn status'
+alias sc='svn commit'
+alias sd='svndiff'
 
 # tmux
 alias tmuxinit='~/.tmux/environments/default'
