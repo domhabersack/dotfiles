@@ -6,16 +6,20 @@ tmux split-window -h
 
 # split right panel horizontally
 tmux split-window -v -t 2
+tmux split-window -v -t 2
 
 # resize and select editor-pane
-tmux resize-pane -x 84 -t 1
+tmux resize-pane -x 128 -t 1
 tmux select-pane -t 1
 
 # open vim in editor-pane
 tmux send-keys -t 1 'vim .' C-m
 
 # resize git-pane
-tmux resize-pane -y 16 -t 2
+tmux resize-pane -y 8 -t 2
+
+# resize server-pane
+tmux resize-pane -y 8 -t 4
 
 # show git status in git-pane
 tmux send-keys -t 2 'gst' C-m
