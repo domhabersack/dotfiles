@@ -2,19 +2,9 @@
 # EXPORTS      #
 ################
 
-export NODE_PATH=/usr/local/share/npm/lib/node_modules
-export PATH=/usr/local/share/npm/bin:/opt/local/bin:/opt/local/sbin:/opt/usr/sbin:/usr/local/bin:/usr/local/sbin:/usr/local/git/bin:/usr/local/opt/coreutils/libexec/gnubin:$PATH
-
-# Android-SDK
-export ANDROID_HOME=/usr/local/opt/android-sdk
-export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
-
-################
-# RBENV        #
-################
-
-# add `rbenv init` to shell to enable shims and autocompletion
-eval "$(rbenv init -)"
+# n
+export N_PREFIX=$HOME/.n
+export PATH=$N_PREFIX/bin:$PATH
 
 
 ################
@@ -123,24 +113,11 @@ git_prompt_string() {
   [ -n "$git_where" ] && echo "$(parse_git_state)$GIT_PROMPT_PREFIX%{$fg[cyan]%}${git_where#(refs/heads/|tags/)}%{$reset_color%}$GIT_PROMPT_SUFFIX"
 }
 
-#
-# rbenv
-#
-
-RBENV_PROMPT_PREFIX=" "
-RBENV_PROMPT_SUFFIX=""
-
-# show current rbenv version if different from rbenv global
-rbenv_prompt_string() {
-  local ver=$(rbenv version-name)
-  [ "$(rbenv global)" != "$ver" ] && echo "$RBENV_PROMPT_PREFIX%{$fg[red]%}${ver}%{$reset_color%}$RBENV_PROMPT_SUFFIX"
-}
-
 # set left-hand prompt
 PS1='%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
 
 # set right-hand prompt
-RPS1='$(git_prompt_string)$(rbenv_prompt_string)'
+RPS1='$(git_prompt_string)'
 
 
 ################
@@ -151,11 +128,6 @@ RPS1='$(git_prompt_string)$(rbenv_prompt_string)'
 md() {
   mkdir -p "$@" && cd "$@"
 }
-
-svndiff() {
-  svn diff "${@}" | colordiff
-}
-
 
 
 ################
@@ -185,12 +157,6 @@ alias gst='git status -s'
 
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
-
-# SVN
-alias svn='colorsvn'
-alias sst='svn status'
-alias sc='svn commit'
-alias sd='svndiff'
 
 # tmux
 alias tmuxinit='~/.tmux/environments/default'
