@@ -16,7 +16,7 @@ set laststatus=2
 
 " color scheme
 set t_Co=256
-set background=dark
+set background=light
 colorscheme solarized
 
 " toggle background with key
@@ -28,8 +28,8 @@ set number
 " always show current position
 set ruler
 
-" show gutter after column 80
-set colorcolumn=81
+" show gutter after column 120
+set colorcolumn=121
 
 " highlight current line
 set cursorline
@@ -113,10 +113,17 @@ let g:ctrlp_custom_ignore = '\v[\/](' . ctrlp_exclude_directories . ')$'
 
 
 """"""""""""""""""""""""""""""""
+" JSX
+""""""""""""""""""""""""""""""""
+
+let g:jsx_ext_required = 0
+
+""""""""""""""""""""""""""""""""
 " NERDTree
 """"""""""""""""""""""""""""""""
 
 let g:ctrlp_dont_split = 'nerdtree'
+let g:NERDTreeWinSize = 48
 map <C-n> :NERDTreeToggle<CR>
 
 
