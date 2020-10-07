@@ -24,4 +24,8 @@
   default = simple
 [user]
   email = dom@islovely.co
-  name = Dominik Habersack
+  name = Dom Habersack
+[pull]
+  ff = only
+[remote "origin"]
+  prune = true
