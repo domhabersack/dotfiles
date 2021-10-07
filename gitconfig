@@ -23,9 +23,11 @@
 [push]
   default = simple
 [user]
-  email = dom@islovely.co
+  email = dom@domhabersack.com
   name = Dom Habersack
 [pull]
   ff = only
 [remote "origin"]
   prune = true
+[init]
+  defaultBranch = main

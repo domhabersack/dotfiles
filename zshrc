@@ -2,9 +2,16 @@
 # EXPORTS      #
 ################
 
-# n
-export N_PREFIX=$HOME/.n
-export PATH=$N_PREFIX/bin:$PATH
+# none
+
+
+################
+# NVM          #
+################
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 
 ################
@@ -134,8 +141,8 @@ md() {
 # ALIASES      #
 ################
 
-# always use color in `grep`
-alias grep='grep --color'
+# use color in `grep`, add line numbers, search directories recursively, ignore vim binary files
+alias grep='grep --binary-file=without-match --color --directories=recurse --line-number'
 
 # always use color in `ls`
 alias ls='ls -G'

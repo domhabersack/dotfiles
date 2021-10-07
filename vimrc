@@ -1,8 +1,41 @@
-" load pathogen
-execute pathogen#infect()
-
 " use vim-settings rather then vi-settings
 set nocompatible
+
+" required by Vundle
+filetype off
+
+""""""""""""""""""""""""""""""""
+" Vundle
+""""""""""""""""""""""""""""""""
+
+" set the runtime path to include Vundle and initialize
+set rtp+=~/.vim/bundle/Vundle.vim
+
+call vundle#begin()
+
+Plugin 'VundleVim/Vundle.vim'
+
+Plugin    'ctrlpvim/ctrlp.vim'
+Plugin       'mattn/emmet-vim'
+Plugin      'othree/html5.vim'
+Plugin  'scrooloose/nerdtree'
+Plugin     'myusuf3/numbers.vim'
+Plugin      'tomtom/tcomment_vim'
+Plugin 'leafgarland/typescript-vim'
+Plugin 'altercation/vim-colors-solarized'
+Plugin          'ap/vim-css-color'
+Plugin    'airblade/vim-gitgutter'
+Plugin    'pangloss/vim-javascript'
+Plugin       'yuezk/vim-js'
+Plugin   'maxmellon/vim-jsx-pretty'
+Plugin     'kshenoy/vim-signature'
+Plugin       'tpope/vim-surround'
+
+call vundle#end()
+
+" also required by Vundle
+filetype plugin indent on
+
 
 """"""""""""""""""""""""""""""""
 " Colors and text
@@ -16,7 +49,7 @@ set laststatus=2
 
 " color scheme
 set t_Co=256
-set background=light
+set background=dark
 colorscheme solarized
 
 " toggle background with key
@@ -56,9 +89,6 @@ set hlsearch
 
 " case-insensitive search
 set ignorecase
-
-" not entirely sure what this does
-filetype plugin indent on
 
 
 """"""""""""""""""""""""""""""""
@@ -113,10 +143,22 @@ let g:ctrlp_custom_ignore = '\v[\/](' . ctrlp_exclude_directories . ')$'
 
 
 """"""""""""""""""""""""""""""""
+" gitgutter
+""""""""""""""""""""""""""""""""
+
+" give sign column the same background color as the line number column
+hi! link SignColumn LineNr
+
+" reduce update time so signs appear faster (also controls delay before vim writes its swap file)
+set updatetime=100
+
+
+""""""""""""""""""""""""""""""""
 " JSX
 """"""""""""""""""""""""""""""""
 
-let g:jsx_ext_required = 0
+"let g:jsx_ext_required = 0
+
 
 """"""""""""""""""""""""""""""""
 " NERDTree
@@ -133,6 +175,13 @@ map <C-n> :NERDTreeToggle<CR>
 
 let g:numbers_exclude = ['nerdtree']
 nnoremap <F3> :NumbersToggle<CR>
+
+
+""""""""""""""""""""""""""""""""
+" vim-jsx-pretty
+""""""""""""""""""""""""""""""""
+
+" nothing so far
 
 
 """"""""""""""""""""""""""""""""
