@@ -22,6 +22,7 @@ Plugin  'scrooloose/nerdtree'
 Plugin     'myusuf3/numbers.vim'
 Plugin      'tomtom/tcomment_vim'
 Plugin 'leafgarland/typescript-vim'
+Plugin      'SirVer/ultisnips'
 Plugin 'altercation/vim-colors-solarized'
 Plugin          'ap/vim-css-color'
 Plugin    'airblade/vim-gitgutter'
@@ -182,6 +183,15 @@ nnoremap <F3> :NumbersToggle<CR>
 """"""""""""""""""""""""""""""""
 
 " nothing so far
+
+
+""""""""""""""""""""""""""""""""
+" ultisnips
+""""""""""""""""""""""""""""""""
+
+let g:UltiSnipsExpandTrigger="<tab>"
+let g:UltiSnipsJumpForwardTrigger="<c-b>"
+let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 
 
 """"""""""""""""""""""""""""""""
