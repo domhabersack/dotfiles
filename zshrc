@@ -2,7 +2,7 @@
 # EXPORTS      #
 ################
 
-# none
+export PATH="/Users/USERNAME/homebrew/bin:$PATH"
 
 
 ################
