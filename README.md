@@ -13,7 +13,7 @@ git clone <repo-url> ~/.dotfiles
 Symlink each dotfile from your home directory:
 
 ```zsh
-for f (gitconfig sqliterc tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f ~/.$f
+for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f ~/.$f
 ```
 
 ### Machine-specific settings
