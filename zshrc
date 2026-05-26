@@ -120,9 +120,27 @@ ssh_context() {
   [ -n "$SSH_CONNECTION" ] && echo "%{$fg[yellow]%}%m%{$reset_color%} "
 }
 
+# build the optional git header line before each prompt render
+precmd() {
+  local toplevel
+  toplevel="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$toplevel" ]; then
+    local url repo
+    url="$(git remote get-url origin 2>/dev/null)"
+    if [ -n "$url" ]; then
+      repo="${url##*/}"
+      repo="${repo%.git}"
+    else
+      repo="$(basename "$toplevel")"
+    fi
+    _GIT_LINE="%{$fg[cyan]%}${repo}$(git_prompt_string)"$'\n'
+  else
+    _GIT_LINE=""
+  fi
+}
+
 # set left-hand prompt (multi-line)
-PS1='$(ssh_context)%{$fg[cyan]%}%~$(git_prompt_string)
-%{$fg[green]%}%#%{$reset_color%} '
+PS1='$(ssh_context)${_GIT_LINE}%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
 
 RPS1=''
 
