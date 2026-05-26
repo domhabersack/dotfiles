@@ -115,13 +115,12 @@ git_prompt_string() {
   fi
 }
 
-# show user@host only when connected via SSH
-ssh_context() {
-  [ -n "$SSH_CONNECTION" ] && echo "%{$fg[yellow]%}%m%{$reset_color%} "
-}
-
-# build the optional git header line before each prompt render
+# build the first prompt line before each prompt render
 precmd() {
+  local line1=""
+
+  [ -n "$SSH_CONNECTION" ] && line1="%{$fg[yellow]%}%m%{$reset_color%}"
+
   local toplevel
   toplevel="$(git rev-parse --show-toplevel 2>/dev/null)"
   if [ -n "$toplevel" ]; then
@@ -133,14 +132,15 @@ precmd() {
     else
       repo="$(basename "$toplevel")"
     fi
-    _GIT_LINE="%{$fg[cyan]%}${repo}$(git_prompt_string)"$'\n'
-  else
-    _GIT_LINE=""
+    [ -n "$line1" ] && line1+=" "
+    line1+="%{$fg[cyan]%}${repo}$(git_prompt_string)"
   fi
+
+  _LINE1="${line1}"$'\n'
 }
 
 # set left-hand prompt (multi-line)
-PS1='$(ssh_context)${_GIT_LINE}%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
+PS1='${_LINE1}%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
 
 RPS1=''
 
