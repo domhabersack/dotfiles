@@ -12,13 +12,8 @@ git clone <repo-url> ~/.dotfiles
 
 Symlink each dotfile from your home directory:
 
-```sh
-ln -s ~/.dotfiles/gitconfig ~/.gitconfig
-ln -s ~/.dotfiles/gitignore_global ~/.gitignore_global
-ln -s ~/.dotfiles/sqliterc ~/.sqliterc
-ln -s ~/.dotfiles/tmux.conf ~/.tmux.conf
-ln -s ~/.dotfiles/vimrc ~/.vimrc
-ln -s ~/.dotfiles/zshrc ~/.zshrc
+```zsh
+for f (gitconfig gitignore_global sqliterc tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f ~/.$f
 ```
 
 ### Machine-specific settings
@@ -32,13 +27,11 @@ Each dotfile sources a `.local` counterpart that is not committed to this reposi
 | `~/.vimrc.local` | local vim settings |
 | `~/.zshrc.local` | machine-specific paths, environment variables, aliases |
 
-Each dotfile in this repository has a corresponding `.local.sample` file with placeholder values to use as a starting point. Copy and fill in the sample for each file you need:
+Each dotfile in this repository has a corresponding `.local.sample` file with placeholder values to use as a starting point. Create a `.local` file from each sample, then symlink it into your home directory:
 
-```sh
-cp ~/.dotfiles/gitconfig.local.sample ~/.gitconfig.local
-cp ~/.dotfiles/tmux.conf.local.sample ~/.tmux.conf.local
-cp ~/.dotfiles/vimrc.local.sample ~/.vimrc.local
-cp ~/.dotfiles/zshrc.local.sample ~/.zshrc.local
+```zsh
+for f (gitconfig tmux.conf vimrc zshrc) cp ~/.dotfiles/$f.local.sample ~/.dotfiles/$f.local
+for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f.local ~/.$f.local
 ```
 
 ## Contents
