@@ -1,11 +1,4 @@
 ################
-# EXPORTS      #
-################
-
-export PATH="/Users/domhabersack/.local/bin:/Users/domhabersack/homebrew/bin:$PATH"
-
-
-################
 # NVM          #
 ################
 
@@ -178,20 +171,6 @@ alias rm='rm -i'
 
 # tmux
 alias tmuxinit='~/.tmux/environments/default'
-
-# rsync
-alias copyroms=rsync --delete -azP --exclude=recentlist-hidden.json --exclude=favourite.json --exclude=.DS_Store ~/Games/Roms/ /Volumes/MIYOO\ MINI/Roms
-
-# pnpm
-export PNPM_HOME="/Users/domhabersack/Library/pnpm"
-case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
-esac
-# pnpm end
-
-# opencode
-export PATH=/Users/domhabersack/.opencode/bin:$PATH
 
 
 ################

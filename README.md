@@ -32,18 +32,13 @@ Each dotfile sources a `.local` counterpart that is not committed to this reposi
 | `~/.vimrc.local` | local vim settings |
 | `~/.zshrc.local` | machine-specific paths, environment variables, aliases |
 
-Example `~/.gitconfig.local`:
-
-```ini
-[user]
-  name = Dom Habersack
-  email = dom@example.com
-```
-
-Example `~/.zshrc.local`:
+Each dotfile in this repository has a corresponding `.local.sample` file with placeholder values to use as a starting point. Copy and fill in the sample for each file you need:
 
 ```sh
-export PATH="/Users/yourusername/.local/bin:/Users/yourusername/homebrew/bin:$PATH"
+cp ~/.dotfiles/gitconfig.local.sample ~/.gitconfig.local
+cp ~/.dotfiles/tmux.conf.local.sample ~/.tmux.conf.local
+cp ~/.dotfiles/vimrc.local.sample ~/.vimrc.local
+cp ~/.dotfiles/zshrc.local.sample ~/.zshrc.local
 ```
 
 ## Contents

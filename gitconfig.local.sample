@@ -1,0 +1,11 @@
+[user]
+  name = Your Name
+  email = your@email.com
+
+[credential "https://github.com"]
+  helper =
+  helper = !/path/to/gh auth git-credential
+
+[credential "https://gist.github.com"]
+  helper =
+  helper = !/path/to/gh auth git-credential
