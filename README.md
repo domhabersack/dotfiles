@@ -13,23 +13,26 @@ git clone <repo-url> ~/.dotfiles
 Symlink each dotfile from your home directory:
 
 ```zsh
-for f (gitconfig gitignore_global sqliterc tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f ~/.$f
+for f (gitconfig sqliterc tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f ~/.$f
 ```
 
 ### Machine-specific settings
 
-Each dotfile sources a `.local` counterpart that is not committed to this repository. Create these files on each machine for settings that should not be shared (paths with usernames, credentials, machine-specific tools):
+Some files are not committed to this repository and must be created on each machine for settings that should not be shared (paths with usernames, credentials, machine-specific tools):
 
 | File | Purpose |
 |------|---------|
+| `~/.gitignore_global` | machine-specific global git ignores |
 | `~/.gitconfig.local` | name, email, signing keys, machine-specific credentials |
 | `~/.tmux.conf.local` | local tmux overrides |
 | `~/.vimrc.local` | local vim settings |
 | `~/.zshrc.local` | machine-specific paths, environment variables, aliases |
 
-Each dotfile in this repository has a corresponding `.local.sample` file with placeholder values to use as a starting point. Create a `.local` file from each sample, then symlink it into your home directory:
+Each has a corresponding `.sample` file with placeholder values to use as a starting point. Create the file from each sample, then symlink it into your home directory:
 
 ```zsh
+cp ~/.dotfiles/gitignore_global.sample ~/.dotfiles/gitignore_global
+ln -s ~/.dotfiles/gitignore_global ~/.gitignore_global
 for f (gitconfig tmux.conf vimrc zshrc) cp ~/.dotfiles/$f.local.sample ~/.dotfiles/$f.local
 for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f.local ~/.$f.local
 ```
