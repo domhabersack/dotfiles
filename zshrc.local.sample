@@ -2,22 +2,19 @@
 # EXPORTS      #
 ################
 
-export PATH="/Users/YOUR_USERNAME/.local/bin:/Users/YOUR_USERNAME/homebrew/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/homebrew/bin:$PATH"
 
 
 ################
 # ALIASES      #
 ################
 
-# rsync
-alias copyroms=rsync --delete -azP --exclude=recentlist-hidden.json --exclude=favourite.json --exclude=.DS_Store ~/path/to/Roms/ /Volumes/DEVICE_NAME/Roms
-
 
 ################
 # PNPM         #
 ################
 
-export PNPM_HOME="/Users/YOUR_USERNAME/Library/pnpm"
+export PNPM_HOME="$HOME/Library/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;
@@ -28,4 +25,4 @@ esac
 # OPENCODE     #
 ################
 
-export PATH=/Users/YOUR_USERNAME/.opencode/bin:$PATH
+export PATH=$HOME/.opencode/bin:$PATH
