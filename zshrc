@@ -187,9 +187,6 @@ alias gst='git status -s'
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
 
-# tmux
-alias tmuxinit='~/.tmux/environments/default'
-
 
 ################
 # LOCAL        #
