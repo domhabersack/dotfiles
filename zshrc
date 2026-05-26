@@ -2,7 +2,7 @@
 # EXPORTS      #
 ################
 
-export PATH="/Users/USERNAME/homebrew/bin:$PATH"
+export PATH="/Users/domhabersack/.local/bin:/Users/domhabersack/homebrew/bin:$PATH"
 
 
 ################
@@ -63,8 +63,6 @@ setopt prompt_subst
 # git
 #
 
-GIT_PROMPT_PREFIX="%{$fg[white]%}[%{$reset_color%}"
-GIT_PROMPT_SUFFIX="%{$fg[white]%}]%{$reset_color%}"
 GIT_PROMPT_AHEAD="%{$fg[cyan]%}↑NUM%{$reset_color%}"
 GIT_PROMPT_BEHIND="%{$fg[cyan]%}↓NUM%{$reset_color%}"
 GIT_PROMPT_MERGING="%{$fg[magenta]%}⚡︎%{$reset_color%}"
@@ -117,14 +115,23 @@ parse_git_state() {
 # prints branch and state if in git repository
 git_prompt_string() {
   local git_where="$(parse_git_branch)"
-  [ -n "$git_where" ] && echo "$(parse_git_state)$GIT_PROMPT_PREFIX%{$fg[cyan]%}${git_where#(refs/heads/|tags/)}%{$reset_color%}$GIT_PROMPT_SUFFIX"
+  if [ -n "$git_where" ]; then
+    local branch="${git_where#(refs/heads/|tags/)}"
+    local state="$(parse_git_state)"
+    echo "%{$reset_color%}:%{$fg[red]%}${branch}%{$reset_color%}${state:+ ${state}}"
+  fi
 }
 
-# set left-hand prompt
-PS1='%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
+# show user@host only when connected via SSH
+ssh_context() {
+  [ -n "$SSH_CONNECTION" ] && echo "%{$fg[yellow]%}%m%{$reset_color%} "
+}
 
-# set right-hand prompt
-RPS1='$(git_prompt_string)'
+# set left-hand prompt (multi-line)
+PS1='$(ssh_context)%{$fg[cyan]%}%~$(git_prompt_string)
+%{$fg[green]%}%#%{$reset_color%} '
+
+RPS1=''
 
 
 ################
@@ -157,6 +164,9 @@ alias gd='git diff'
 alias gdw='git diff --word-diff=color'
 alias gl='git llog'
 alias gm='git merge'
+alias gp='git push'
+alias gp@='git push origin -u @'
+alias gpo='git push origin'
 alias gr='git rm'
 alias grb='git rebase'
 alias grbc='git add . && git rebase --continue'
@@ -168,3 +178,24 @@ alias rm='rm -i'
 
 # tmux
 alias tmuxinit='~/.tmux/environments/default'
+
+# rsync
+alias copyroms=rsync --delete -azP --exclude=recentlist-hidden.json --exclude=favourite.json --exclude=.DS_Store ~/Games/Roms/ /Volumes/MIYOO\ MINI/Roms
+
+# pnpm
+export PNPM_HOME="/Users/domhabersack/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# pnpm end
+
+# opencode
+export PATH=/Users/domhabersack/.opencode/bin:$PATH
+
+
+################
+# LOCAL        #
+################
+
+[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

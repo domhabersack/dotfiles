@@ -23,7 +23,6 @@ Plugin     'myusuf3/numbers.vim'
 Plugin      'tomtom/tcomment_vim'
 Plugin 'leafgarland/typescript-vim'
 Plugin      'SirVer/ultisnips'
-Plugin 'altercation/vim-colors-solarized'
 Plugin          'ap/vim-css-color'
 Plugin    'airblade/vim-gitgutter'
 Plugin    'pangloss/vim-javascript'
@@ -51,10 +50,7 @@ set laststatus=2
 " color scheme
 set t_Co=256
 set background=dark
-colorscheme solarized
-
-" toggle background with key
-call togglebg#map("<F5>")
+colorscheme desert
 
 " line numbers
 set number
@@ -200,3 +196,12 @@ let g:UltiSnipsJumpBackwardTrigger="<c-z>"
 
 " toggle `set list`
 nmap <leader>l :set list!<CR>
+
+
+""""""""""""""""""""""""""""""""
+" Local
+""""""""""""""""""""""""""""""""
+
+if filereadable(expand("~/.vimrc.local"))
+  source ~/.vimrc.local
+endif
