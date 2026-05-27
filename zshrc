@@ -117,6 +117,7 @@ git_prompt_string() {
 
 # build the first prompt line before each prompt render
 precmd() {
+  print ""
   local line1=""
 
   [ -n "$SSH_CONNECTION" ] && line1="%{$fg[yellow]%}%m%{$reset_color%}"
