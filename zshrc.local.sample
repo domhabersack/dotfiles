@@ -1,0 +1,28 @@
+################
+# EXPORTS      #
+################
+
+export PATH="$HOME/.local/bin:$HOME/homebrew/bin:$PATH"
+
+
+################
+# ALIASES      #
+################
+
+
+################
+# PNPM         #
+################
+
+export PNPM_HOME="$HOME/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
+
+################
+# OPENCODE     #
+################
+
+export PATH=$HOME/.opencode/bin:$PATH

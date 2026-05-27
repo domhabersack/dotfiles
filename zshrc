@@ -1,11 +1,4 @@
 ################
-# EXPORTS      #
-################
-
-export PATH="/Users/USERNAME/homebrew/bin:$PATH"
-
-
-################
 # NVM          #
 ################
 
@@ -63,8 +56,6 @@ setopt prompt_subst
 # git
 #
 
-GIT_PROMPT_PREFIX="%{$fg[white]%}[%{$reset_color%}"
-GIT_PROMPT_SUFFIX="%{$fg[white]%}]%{$reset_color%}"
 GIT_PROMPT_AHEAD="%{$fg[cyan]%}↑NUM%{$reset_color%}"
 GIT_PROMPT_BEHIND="%{$fg[cyan]%}↓NUM%{$reset_color%}"
 GIT_PROMPT_MERGING="%{$fg[magenta]%}⚡︎%{$reset_color%}"
@@ -117,14 +108,41 @@ parse_git_state() {
 # prints branch and state if in git repository
 git_prompt_string() {
   local git_where="$(parse_git_branch)"
-  [ -n "$git_where" ] && echo "$(parse_git_state)$GIT_PROMPT_PREFIX%{$fg[cyan]%}${git_where#(refs/heads/|tags/)}%{$reset_color%}$GIT_PROMPT_SUFFIX"
+  if [ -n "$git_where" ]; then
+    local branch="${git_where#(refs/heads/|tags/)}"
+    local state="$(parse_git_state)"
+    echo "%{$reset_color%}:%{$fg[red]%}${branch}%{$reset_color%}${state:+ ${state}}"
+  fi
 }
 
-# set left-hand prompt
-PS1='%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
+# build the first prompt line before each prompt render
+precmd() {
+  local line1=""
 
-# set right-hand prompt
-RPS1='$(git_prompt_string)'
+  [ -n "$SSH_CONNECTION" ] && line1="%{$fg[yellow]%}%m%{$reset_color%}"
+
+  local toplevel
+  toplevel="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$toplevel" ]; then
+    local url repo
+    url="$(git remote get-url origin 2>/dev/null)"
+    if [ -n "$url" ]; then
+      repo="${url##*/}"
+      repo="${repo%.git}"
+    else
+      repo="$(basename "$toplevel")"
+    fi
+    [ -n "$line1" ] && line1+=" "
+    line1+="%{$fg[cyan]%}${repo}$(git_prompt_string)"
+  fi
+
+  _LINE1="${line1}"$'\n'
+}
+
+# set left-hand prompt (multi-line)
+PS1='${_LINE1}%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
+
+RPS1=''
 
 
 ################
@@ -157,6 +175,9 @@ alias gd='git diff'
 alias gdw='git diff --word-diff=color'
 alias gl='git llog'
 alias gm='git merge'
+alias gp='git push'
+alias gp@='git push origin -u @'
+alias gpo='git push origin'
 alias gr='git rm'
 alias grb='git rebase'
 alias grbc='git add . && git rebase --continue'
@@ -166,5 +187,9 @@ alias gst='git status -s'
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
 
-# tmux
-alias tmuxinit='~/.tmux/environments/default'
+
+################
+# LOCAL        #
+################
+
+[ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"

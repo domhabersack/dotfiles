@@ -22,9 +22,6 @@
   helper = osxkeychain
 [push]
   default = simple
-[user]
-  email = dom@domhabersack.com
-  name = Dom Habersack
 [pull]
   ff = only
 [remote "origin"]
@@ -36,3 +33,5 @@
   clean = git-lfs clean -- %f
   smudge = git-lfs smudge -- %f
   process = git-lfs filter-process
+[include]
+  path = ~/.gitconfig.local
