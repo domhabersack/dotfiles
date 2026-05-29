@@ -2,9 +2,17 @@
 # NVM          #
 ################
 
+# lazy-load: shims defer the slow nvm.sh source until first use
 export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+_load_nvm() {
+  unset -f nvm node npm npx
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+}
+nvm()  { _load_nvm; nvm  "$@"; }
+node() { _load_nvm; node "$@"; }
+npm()  { _load_nvm; npm  "$@"; }
+npx()  { _load_nvm; npx  "$@"; }
 
 
 ################
@@ -25,8 +33,14 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*' 'l:
 # enable colors
 autoload -U colors && colors
 
-# colors used in `ls`
-export LSCOLORS="Gxfxcxdxbxegedabagacad"
+# prefer GNU color flag (Linux); fall back to BSD -G (macOS)
+if ls --color=auto > /dev/null 2>&1; then
+  alias ls='ls --color=auto'
+  export LS_COLORS='di=1;36:ln=35:so=32:pi=33:ex=31:bd=34;46:cd=34;43:su=30;41:sg=30;46:tw=30;42:ow=30;43'
+else
+  alias ls='ls -G'
+  export LSCOLORS='Gxfxcxdxbxegedabagacad'
+fi
 
 
 ################
@@ -34,8 +48,34 @@ export LSCOLORS="Gxfxcxdxbxegedabagacad"
 ################
 
 HISTFILE=~/.zsh_history
-HISTSIZE=10000
-SAVEHIST=10000
+HISTSIZE=100000
+SAVEHIST=100000
+
+setopt EXTENDED_HISTORY       # save timestamp with each entry
+setopt INC_APPEND_HISTORY     # write immediately, not on shell exit
+setopt SHARE_HISTORY          # share across all open sessions (tmux panes, SSH)
+setopt HIST_IGNORE_ALL_DUPS   # drop older duplicates
+setopt HIST_REDUCE_BLANKS     # collapse extra whitespace
+setopt HIST_VERIFY            # show !-expansion before running
+setopt HIST_IGNORE_SPACE      # leading space keeps command out of history
+
+
+################
+# OPTIONS      #
+################
+
+setopt AUTO_CD                # type dirname to cd into it
+setopt AUTO_PUSHD             # cd pushes onto directory stack
+setopt PUSHD_IGNORE_DUPS
+setopt INTERACTIVE_COMMENTS   # allow # comments in interactive shell
+setopt EXTENDED_GLOB
+setopt NO_BEEP
+
+bindkey -e                    # emacs key bindings (Ctrl-A/E/R/W/U etc.)
+bindkey '^[[1;5C' forward-word   # Ctrl-Right
+bindkey '^[[1;5D' backward-word  # Ctrl-Left
+bindkey '^[f'     forward-word   # Alt-F (Terminus iOS)
+bindkey '^[b'     backward-word  # Alt-B (Terminus iOS)
 
 
 ################
@@ -69,40 +109,35 @@ parse_git_branch() {
 }
 
 # show different symbols as appropriate for various repository states
+# uses a single `git status` call instead of multiple git invocations
 parse_git_state() {
-  # compose value via multiple conditional appends
-  local GIT_STATE=""
+  local status_out state=""
+  status_out="$(git status --porcelain=v2 --branch 2>/dev/null)" || return
 
-  local NUM_AHEAD="$(git log --oneline @{u}.. 2> /dev/null | wc -l | tr -d ' ')"
-  if [ "$NUM_AHEAD" -gt 0 ]; then
-    GIT_STATE=$GIT_STATE${GIT_PROMPT_AHEAD//NUM/$NUM_AHEAD}
-  fi
+  local git_dir
+  git_dir="$(git rev-parse --git-dir 2>/dev/null)"
 
-  local NUM_BEHIND="$(git log --oneline ..@{u} 2> /dev/null | wc -l | tr -d ' ')"
-  if [ "$NUM_BEHIND" -gt 0 ]; then
-    GIT_STATE=$GIT_STATE${GIT_PROMPT_BEHIND//NUM/$NUM_BEHIND}
-  fi
+  local ahead behind staged modified untracked
+  read -r ahead behind staged modified untracked < <(print -- "$status_out" | awk '
+    /^# branch.ab/ {
+      a=$3; b=$4
+      gsub(/[^0-9]/, "", a); gsub(/[^0-9]/, "", b)
+      ahead=a+0; behind=b+0
+    }
+    /^[12] [MADRC]/  { staged=1 }
+    /^[12] .[MADRC]/ { modified=1 }
+    /^\?/            { untracked=1 }
+    END { print ahead+0, behind+0, staged+0, modified+0, untracked+0 }
+  ')
 
-  local GIT_DIR="$(git rev-parse --git-dir 2> /dev/null)"
-  if [ -n $GIT_DIR ] && test -r $GIT_DIR/MERGE_HEAD; then
-    GIT_STATE=$GIT_STATE$GIT_PROMPT_MERGING
-  fi
+  (( ahead    > 0 )) && state+=${GIT_PROMPT_AHEAD//NUM/$ahead}
+  (( behind   > 0 )) && state+=${GIT_PROMPT_BEHIND//NUM/$behind}
+  [[ -n $git_dir && -r "$git_dir/MERGE_HEAD" ]] && state+=$GIT_PROMPT_MERGING
+  (( staged       )) && state+=$GIT_PROMPT_STAGED
+  (( modified     )) && state+=$GIT_PROMPT_MODIFIED
+  (( untracked    )) && state+=$GIT_PROMPT_UNTRACKED
 
-  if ! git diff --cached --quiet 2> /dev/null; then
-    GIT_STATE=$GIT_STATE$GIT_PROMPT_STAGED
-  fi
-
-  if ! git diff --quiet 2> /dev/null; then
-    GIT_STATE=$GIT_STATE$GIT_PROMPT_MODIFIED
-  fi
-
-  if [[ -n $(git ls-files --other --exclude-standard 2> /dev/null) ]]; then
-    GIT_STATE=$GIT_STATE$GIT_PROMPT_UNTRACKED
-  fi
-
-  if [[ -n $GIT_STATE ]]; then
-    echo "$GIT_STATE"
-  fi
+  [[ -n $state ]] && echo "$state"
 }
 
 # prints branch and state if in git repository
@@ -145,6 +180,19 @@ PS1='${_LINE1}%{$fg[cyan]%}%~ %{$fg[green]%}%#%{$reset_color%} '
 
 RPS1=''
 
+# set terminal title to host:path when SSH'd; skip inside tmux to avoid
+# conflicting with the alphabetical window-sort hook (tmux.conf:131-133)
+if [[ -z "$TMUX" ]]; then
+  _set_title() {
+    if [[ -n "$SSH_CONNECTION" ]]; then
+      print -Pn "\e]0;%m: %~\a"
+    else
+      print -Pn "\e]0;%~\a"
+    fi
+  }
+  precmd_functions+=(_set_title)
+fi
+
 
 ################
 # FUNCTIONS    #
@@ -152,7 +200,7 @@ RPS1=''
 
 # create directory and change to it
 md() {
-  mkdir -p "$@" && cd "$@"
+  mkdir -p -- "$1" && cd -- "$1"
 }
 
 
@@ -163,8 +211,7 @@ md() {
 # use color in `grep`, add line numbers, search directories recursively, ignore vim binary files
 alias grep='grep --binary-file=without-match --color --directories=recurse --line-number'
 
-# always use color in `ls`
-alias ls='ls -G'
+# ls with color (alias set in COLORS block above)
 alias la='ls -la'
 
 # git
@@ -187,6 +234,36 @@ alias gst='git status -s'
 
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
+
+
+################
+# PLUGINS      #
+################
+
+# fzf — fuzzy finder: Ctrl-R history search, Ctrl-T file picker, Alt-C cd
+if [[ ! -d "$HOME/.fzf" ]] && command -v git >/dev/null 2>&1; then
+  git clone --depth 1 https://github.com/junegunn/fzf.git "$HOME/.fzf" \
+    && "$HOME/.fzf/install" --key-bindings --completion --no-update-rc --no-bash --no-fish
+fi
+[ -f "$HOME/.fzf.zsh" ] && source "$HOME/.fzf.zsh"
+
+# zsh-autosuggestions and zsh-syntax-highlighting (auto-install on first run)
+ZSH_PLUGIN_DIR="$HOME/.zsh/plugins"
+for _p in zsh-autosuggestions zsh-syntax-highlighting; do
+  if [[ ! -d "$ZSH_PLUGIN_DIR/$_p" ]] && command -v git >/dev/null 2>&1; then
+    git clone --depth 1 "https://github.com/zsh-users/$_p.git" "$ZSH_PLUGIN_DIR/$_p"
+  fi
+done
+unset _p
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+[ -f "$ZSH_PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh" ] \
+  && source "$ZSH_PLUGIN_DIR/zsh-autosuggestions/zsh-autosuggestions.zsh"
+# syntax-highlighting must be sourced last
+[ -f "$ZSH_PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ] \
+  && source "$ZSH_PLUGIN_DIR/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+
+# zoxide — smart cd with frecency (install with: brew install zoxide)
+command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
 
 
 ################

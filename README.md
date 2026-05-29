@@ -37,6 +37,20 @@ for f (gitconfig tmux.conf vimrc zshrc) cp ~/.dotfiles/$f.local.sample ~/.dotfil
 for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f.local ~/.$f.local
 ```
 
+### Plugins (auto-installed)
+
+On first shell start, `zshrc` automatically clones and installs:
+
+- **fzf** — fuzzy finder (`~/.fzf`). Provides Ctrl-R history search, Ctrl-T file picker, Alt-C cd.
+- **zsh-autosuggestions** — ghost-text suggestions as you type (`~/.zsh/plugins/`).
+- **zsh-syntax-highlighting** — command highlighting before you press Enter.
+
+No manual steps needed — works the same way as TPM auto-install in `tmux.conf`.
+
+### Optional tools
+
+- `brew install zoxide` — smart `cd` with frecency; auto-activated if present.
+
 ## Contents
 
 * gitconfig - aliases, colors
@@ -51,6 +65,10 @@ Some of the most useful elements of these dotfiles are:
 - `git llog` (or `gl`) for a lovely git log
 - `md DIRECTORY` to create a directory and change to it
 - git- and rbenv-information in prompt
+- **Ctrl-R** fuzzy history search (fzf) — biggest win for SSH from mobile
+- **Shared history** across tmux panes and SSH sessions — commands appear everywhere immediately
+- **Lazy nvm** — shell starts fast; nvm loads only when you first call `node`/`npm`/`npx`/`nvm`
+- **Autosuggestions** — ghost-text completions reduce typing, especially on mobile keyboards
 
 ## Screenshots
 

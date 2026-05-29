@@ -2,6 +2,9 @@
 # EXPORTS      #
 ################
 
+# auto-dedup PATH as entries are prepended or appended
+typeset -U path PATH
+
 export PATH="$HOME/.local/bin:$HOME/homebrew/bin:$PATH"
 
 
@@ -15,14 +18,11 @@ export PATH="$HOME/.local/bin:$HOME/homebrew/bin:$PATH"
 ################
 
 export PNPM_HOME="$HOME/Library/pnpm"
-case ":$PATH:" in
-  *":$PNPM_HOME:"*) ;;
-  *) export PATH="$PNPM_HOME:$PATH" ;;
-esac
+export PATH="$PNPM_HOME:$PATH"
 
 
 ################
 # OPENCODE     #
 ################
 
-export PATH=$HOME/.opencode/bin:$PATH
+export PATH="$HOME/.opencode/bin:$PATH"
