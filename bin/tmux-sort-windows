@@ -1,0 +1,10 @@
+#!/bin/sh
+tmp=$(mktemp)
+tmux list-windows -F '#{window_index} #{window_name}' | sort -k2 > "$tmp"
+i=10000
+while IFS=' ' read -r idx rest; do
+  tmux move-window -s ":$idx" -t ":$i" 2>/dev/null
+  i=$((i + 1))
+done < "$tmp"
+rm -f "$tmp"
+tmux move-window -r
