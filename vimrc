@@ -109,6 +109,10 @@ set ignorecase
 " Behavior
 """"""""""""""""""""""""""""""""
 
+" reload files changed on disk automatically
+set autoread
+autocmd FocusGained,BufEnter,CursorHold,CursorHoldI * if mode() != 'c' | checktime | endif
+
 " do not auto-insert comments
 autocmd FileType * setlocal formatoptions-=c formatoptions-=r formatoptions-=o
 
