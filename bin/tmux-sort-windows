@@ -1,4 +1,9 @@
 #!/bin/sh
+lock=/tmp/tmux-sort-windows.lock
+[ -e "$lock" ] && exit 0
+touch "$lock"
+trap 'rm -f "$lock"' EXIT
+
 tmp=$(mktemp)
 tmux list-windows -F '#{window_index} #{window_name}' | sort -k2 > "$tmp"
 i=10000
