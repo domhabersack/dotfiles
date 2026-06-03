@@ -3,6 +3,10 @@ lock=/tmp/tmux-sort-windows.lock
 mkdir "$lock" 2>/dev/null || exit 0
 trap 'rm -rf "$lock"' EXIT
 
+current=$(tmux list-windows -F '#{window_name}' | tr '\n' ' ')
+sorted=$(tmux list-windows -F '#{window_name}' | sort | tr '\n' ' ')
+[ "$current" = "$sorted" ] && exit 0
+
 tmp=$(mktemp)
 tmux list-windows -F '#{window_index} #{window_name}' | sort -k2 > "$tmp"
 i=10000
