@@ -1,0 +1,21 @@
+#!/bin/sh
+# Starts a background fswatch watcher that re-runs tmux-color-windows
+# whenever the window-colors config file is saved.
+# Single-instance guarded: safe to call on every config reload.
+
+CONFIG="$HOME/.dotfiles/window-colors"
+PIDFILE=/tmp/tmux-color-watch.pid
+
+command -v fswatch >/dev/null 2>&1 || exit 0
+[ -f "$CONFIG" ] || exit 0
+
+# Reuse the running watcher if it is still alive.
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  exit 0
+fi
+
+CONFIG="$CONFIG" nohup sh -c \
+  'fswatch -o "$CONFIG" | while read -r _; do ~/.dotfiles/bin/tmux-color-windows; done' \
+  >/dev/null 2>&1 &
+
+echo $! > "$PIDFILE"
