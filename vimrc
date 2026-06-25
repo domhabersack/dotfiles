@@ -221,26 +221,26 @@ require('mason-lspconfig').setup({
   },
 })
 
-local lspconfig    = require('lspconfig')
 local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
 local on_attach = function(_, bufnr)
   local opts = { buffer = bufnr, silent = true }
-  vim.keymap.set('n', 'gd',         vim.lsp.buf.definition,     opts) -- goto definition
-  vim.keymap.set('n', 'gD',         vim.lsp.buf.declaration,    opts) -- goto declaration
-  vim.keymap.set('n', 'gr',         vim.lsp.buf.references,     opts) -- find references
-  vim.keymap.set('n', 'gi',         vim.lsp.buf.implementation, opts) -- goto implementation
-  vim.keymap.set('n', 'K',          vim.lsp.buf.hover,          opts) -- hover docs / type info
-  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename,         opts) -- rename symbol
-  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action,    opts) -- code actions
-  vim.keymap.set('n', '[d',         vim.diagnostic.goto_prev,   opts) -- prev error/warning
-  vim.keymap.set('n', ']d',         vim.diagnostic.goto_next,   opts) -- next error/warning
-  vim.keymap.set('n', '<leader>e',  vim.diagnostic.open_float,  opts) -- show error detail
+  vim.keymap.set('n', 'gd',         vim.lsp.buf.definition,     opts)
+  vim.keymap.set('n', 'gD',         vim.lsp.buf.declaration,    opts)
+  vim.keymap.set('n', 'gr',         vim.lsp.buf.references,     opts)
+  vim.keymap.set('n', 'gi',         vim.lsp.buf.implementation, opts)
+  vim.keymap.set('n', 'K',          vim.lsp.buf.hover,          opts)
+  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename,         opts)
+  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action,    opts)
+  vim.keymap.set('n', '[d',         vim.diagnostic.goto_prev,   opts)
+  vim.keymap.set('n', ']d',         vim.diagnostic.goto_next,   opts)
+  vim.keymap.set('n', '<leader>e',  vim.diagnostic.open_float,  opts)
 end
 
-for _, server in ipairs({ 'ts_ls', 'tailwindcss', 'eslint', 'cssls', 'html', 'jsonls' }) do
-  lspconfig[server].setup({ capabilities = capabilities, on_attach = on_attach })
-end
+-- nvim 0.11+: server configs are auto-loaded from nvim-lspconfig's lsp/ dir.
+-- vim.lsp.config('*') applies user overrides to all servers before they start.
+vim.lsp.config('*', { capabilities = capabilities, on_attach = on_attach })
+vim.lsp.enable({ 'ts_ls', 'tailwindcss', 'eslint', 'cssls', 'html', 'jsonls' })
 
 -- diagnostics: inline virtual text + gutter signs + floating preview
 vim.diagnostic.config({
@@ -280,17 +280,14 @@ cmp.setup({
   }),
 })
 
--- treesitter: richer syntax for TypeScript / TSX / JSX / CSS / etc.
-require('nvim-treesitter.configs').setup({
-  ensure_installed = {
-    'typescript', 'tsx', 'javascript',
-    'html', 'css', 'json',
-    'lua', 'vim', 'vimdoc',
-    'yaml', 'markdown', 'markdown_inline',
-    'bash', 'gitignore',
-  },
-  highlight = { enable = true },
-  indent    = { enable = true },
+-- treesitter: nvim 0.10+ enables highlight/indent natively when parsers are present.
+-- nvim-treesitter manages parser installation; configs module was removed post-rewrite.
+require('nvim-treesitter.install').install({
+  'typescript', 'tsx', 'javascript',
+  'html', 'css', 'json',
+  'lua', 'vim', 'vimdoc',
+  'yaml', 'markdown', 'markdown_inline',
+  'bash', 'gitignore',
 })
 
 -- format on save with prettier
