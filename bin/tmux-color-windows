@@ -2,7 +2,7 @@
 # Sets @tmux_color on each window based on ~/.dotfiles/window-colors.
 # window-status-format reads #{@tmux_color} to colorize the status-bar entry.
 # Strips task-indicator emojis before matching so colored windows stay colored
-# after ✅ are appended/removed.
+# after task indicators are appended/removed.
 
 CONFIG="$HOME/.dotfiles/window-colors"
 
