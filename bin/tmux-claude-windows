@@ -1,0 +1,12 @@
+#!/bin/sh
+# Sets @tmux_claude_active on each window when any pane has an active Claude session.
+# Called by zsh preexec/precmd hooks — not on a timer.
+
+tmux list-windows -a -F '#{window_id}' | while read -r wid; do
+  active=$(tmux list-panes -t "$wid" -F '#{@tmux_claude}' 2>/dev/null | grep -c '^1$')
+  if [ "$active" -gt 0 ]; then
+    tmux set-window-option -t "$wid" @tmux_claude_active "1"
+  else
+    tmux set-window-option -t "$wid" @tmux_claude_active ""
+  fi
+done
