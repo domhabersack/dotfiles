@@ -1,16 +1,25 @@
 #!/bin/sh
+# Sorts windows alphabetically, ignoring any leading marker (e.g. an emoji
+# like 👉 used to flag a window as an "active" project) so adding/removing
+# a marker never changes the window's position.
 lock=/tmp/tmux-sort-windows.lock
 mkdir "$lock" 2>/dev/null || exit 0
 trap 'rm -rf "$lock"' EXIT
 
-current=$(tmux list-windows -F '#{window_name}' | tr '\n' ' ')
-sorted=$(tmux list-windows -F '#{window_name}' | sort | tr '\n' ' ')
+strip_marker() {
+  sed 's/^[^a-zA-Z0-9]*//'
+}
+
+current=$(tmux list-windows -F '#{window_name}' | strip_marker | tr '\n' ' ')
+sorted=$(tmux list-windows -F '#{window_name}' | strip_marker | sort | tr '\n' ' ')
 [ "$current" = "$sorted" ] && exit 0
 
 tmp=$(mktemp)
-tmux list-windows -F '#{window_index} #{window_name}' | sort -k2 > "$tmp"
+tmux list-windows -F '#{window_index}	#{window_name}' | \
+  awk -F'\t' '{ key = $2; sub(/^[^a-zA-Z0-9]*/, "", key); print key "\t" $1 }' | \
+  sort -t'	' -k1,1 > "$tmp"
 i=10000
-while IFS=' ' read -r idx rest; do
+while IFS='	' read -r _ idx; do
   tmux move-window -s ":$idx" -t ":$i" 2>/dev/null
   i=$((i + 1))
 done < "$tmp"

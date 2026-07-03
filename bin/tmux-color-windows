@@ -2,7 +2,9 @@
 # Sets @tmux_color on each window based on ~/.dotfiles/window-colors.
 # window-status-format reads #{@tmux_color} to colorize the status-bar entry.
 # Strips task-indicator emojis before matching so colored windows stay colored
-# after task indicators are appended/removed.
+# after task indicators are appended/removed. Also strips any leading marker
+# (e.g. an emoji like 👉 used to flag a window as an "active" project) so
+# marking a window doesn't break color matching.
 
 CONFIG="$HOME/.dotfiles/window-colors"
 
@@ -38,8 +40,9 @@ done < "$CONFIG"
 # Apply (or clear) the color variable on every window across all sessions.
 tmux list-windows -a -F '#{window_id} #{window_name}' | \
 while read -r wid name; do
-  # Extract the leading slug ([a-zA-Z0-9.-]+) — ignores any suffix regardless of format.
-  base=$(printf '%s' "$name" | sed 's/^\([a-zA-Z0-9.-]*\).*/\1/')
+  # Extract the leading slug ([a-zA-Z0-9.-]+) — ignores any leading marker
+  # (non-alphanumeric prefix) and any suffix regardless of format.
+  base=$(printf '%s' "$name" | sed 's/^[^a-zA-Z0-9]*//; s/^\([a-zA-Z0-9.-]*\).*/\1/')
 
   # Look up the color for this slug (empty if not in any group).
   color=$(awk -F'\t' -v n="$base" '$1 == n { print $2; exit }' "$tmpfile")
