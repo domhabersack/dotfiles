@@ -37,6 +37,7 @@ Some files are not committed to this repository and must be created on each mach
 | `~/.tmux.conf.local` | local tmux overrides |
 | `~/.vimrc.local` | local vim settings |
 | `~/.zshrc.local` | machine-specific paths, environment variables, aliases |
+| `~/.dotfiles/window-colors` | tmux window color groups (differs per machine — see below) |
 
 Each has a corresponding `.sample` file with placeholder values to use as a starting point. Create the file from each sample, then symlink it into your home directory:
 
@@ -46,6 +47,15 @@ ln -s ~/.dotfiles/gitignore_global ~/.gitignore_global
 for f (gitconfig tmux.conf vimrc zshrc) cp ~/.dotfiles/$f.local.sample ~/.dotfiles/$f.local
 for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f.local ~/.$f.local
 ```
+
+`window-colors` is read in place from `~/.dotfiles/` (no symlink needed) by
+`bin/tmux-color-windows`, so just copy the sample:
+
+```zsh
+cp ~/.dotfiles/window-colors.sample ~/.dotfiles/window-colors
+```
+
+Then edit it to list this machine's own window-name groups and colors.
 
 ### Plugins (auto-installed)
 
