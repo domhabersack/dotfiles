@@ -215,6 +215,46 @@ if [[ -n "$TMUX" ]]; then
   }
   preexec_functions+=(_claude_preexec)
   precmd_functions+=(_claude_precmd)
+
+  # When a window's shell first enters a repository directory under ~/Developer,
+  # rename the tmux window to that repository's root directory name. Because
+  # bin/tmux-color-windows and the sort hooks key off the window name, this also
+  # colors and sorts the window automatically.
+  #
+  #   - Fires only for a SUBDIRECTORY of ~/Developer (cd'ing to ~/Developer itself
+  #     does nothing). The name is the first path segment under ~/Developer, so
+  #     ~/Developer/www.my-project.com/public -> "www.my-project.com".
+  #   - Locks once per window (@autoname_done): after the first rename the window
+  #     is never touched again, so later navigation leaves the name alone.
+  #   - Never overwrites a manually chosen name: rename-window turns automatic-rename
+  #     off, so windows with automatic-rename already off are left untouched.
+  _tmux_autoname_repo() {
+    # Cheap shell-local short-circuit: once settled, skip all tmux calls.
+    [[ -n "$_tmux_autoname_settled" ]] && return
+
+    local base="$HOME/Developer"
+    [[ "$PWD" == "$base"/* ]] || return          # strict subdirectory only
+    local rest="${PWD#$base/}"
+    local repo="${rest%%/*}"                       # first path segment
+    [[ -z "$repo" ]] && return
+
+    # Already auto-named this window once -> locked, never touch again.
+    if [[ "$(tmux show-options -wqv @autoname_done 2>/dev/null)" == 1 ]]; then
+      _tmux_autoname_settled=1
+      return
+    fi
+
+    # Preserve a manually named window (automatic-rename already turned off).
+    if [[ "$(tmux show-options -wqv automatic-rename 2>/dev/null)" == off ]]; then
+      _tmux_autoname_settled=1
+      return
+    fi
+
+    tmux rename-window -- "$repo" 2>/dev/null
+    tmux set-option -w @autoname_done 1 2>/dev/null
+    _tmux_autoname_settled=1
+  }
+  chpwd_functions+=(_tmux_autoname_repo)
 fi
 
 
