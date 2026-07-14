@@ -19,10 +19,15 @@ for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f ~/.$f
 For neovim, also create the config directory symlink:
 
 ```zsh
-brew install neovim ripgrep fd
+brew install neovim ripgrep fd tree-sitter-cli
 mkdir -p ~/.config/nvim
 ln -s ~/.dotfiles/vimrc ~/.config/nvim/init.vim
 ```
+
+`tree-sitter-cli` is required for syntax highlighting: the `main` branch of
+nvim-treesitter compiles parsers with it. Note it is a **separate** formula from
+`tree-sitter` (which is library-only), and the CLI must come from a package
+manager, not npm.
 
 On first `nvim` launch, vim-plug installs all plugins automatically. Language servers (tsserver, tailwindcss-language-server, eslint, etc.) are then installed by mason on the second launch — check progress with `:Mason`.
 
