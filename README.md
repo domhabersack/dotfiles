@@ -57,6 +57,12 @@ cp ~/.dotfiles/window-colors.sample ~/.dotfiles/window-colors
 
 Then edit it to list this machine's own window-name groups and colors.
 
+The window list also shows a 🔔 next to any background window whose pane rings
+the terminal bell (e.g. Claude Code waiting for input). That relies on the
+program emitting an actual bell character — for Claude Code, set
+`"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
+Without it, Claude uses desktop notifications instead and the 🔔 never appears.
+
 ### Plugins (auto-installed)
 
 On first shell/editor start, plugins install themselves automatically:
