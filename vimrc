@@ -280,14 +280,27 @@ cmp.setup({
   }),
 })
 
--- treesitter: nvim 0.10+ enables highlight/indent natively when parsers are present.
--- nvim-treesitter manages parser installation; configs module was removed post-rewrite.
+-- treesitter (nvim-treesitter main branch): the plugin installs parsers but no
+-- longer manages highlighting/indent — we start them per buffer ourselves.
 require('nvim-treesitter.install').install({
   'typescript', 'tsx', 'javascript',
   'html', 'css', 'json',
   'lua', 'vim', 'vimdoc',
   'yaml', 'markdown', 'markdown_inline',
   'bash', 'gitignore',
+})
+
+-- Enable treesitter highlighting + indent for any buffer whose filetype has an
+-- installed parser (guarded so filetypes without one fall back to defaults).
+vim.api.nvim_create_autocmd('FileType', {
+  callback = function(args)
+    local lang = vim.treesitter.language.get_lang(vim.bo[args.buf].filetype)
+    -- language.add returns truthy only when the parser is actually installed.
+    if lang and vim.treesitter.language.add(lang) then
+      vim.treesitter.start(args.buf, lang)
+      vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+    end
+  end,
 })
 
 -- format on save with prettier
