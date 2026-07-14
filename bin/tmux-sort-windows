@@ -1,23 +1,23 @@
 #!/bin/sh
-# Sorts windows alphabetically, ignoring any leading marker (e.g. an emoji
-# like 👉 used to flag a window as an "active" project) so adding/removing
-# a marker never changes the window's position.
+# Sorts windows alphabetically by their canonical slug (see bin/tmux-window-slug),
+# so a leading marker or trailing task suffix never changes a window's position.
 lock=/tmp/tmux-sort-windows.lock
 mkdir "$lock" 2>/dev/null || exit 0
 trap 'rm -rf "$lock"' EXIT
 
-strip_marker() {
-  sed 's/^[^a-zA-Z0-9]*//'
+slug() {
+  "$HOME/.dotfiles/bin/tmux-window-slug"
 }
 
-current=$(tmux list-windows -F '#{window_name}' | strip_marker | tr '\n' ' ')
-sorted=$(tmux list-windows -F '#{window_name}' | strip_marker | sort | tr '\n' ' ')
+current=$(tmux list-windows -F '#{window_name}' | slug | tr '\n' ' ')
+sorted=$(tmux list-windows -F '#{window_name}' | slug | sort | tr '\n' ' ')
 [ "$current" = "$sorted" ] && exit 0
 
 tmp=$(mktemp)
 tmux list-windows -F '#{window_index}	#{window_name}' | \
-  awk -F'\t' '{ key = $2; sub(/^[^a-zA-Z0-9]*/, "", key); print key "\t" $1 }' | \
-  sort -t'	' -k1,1 > "$tmp"
+while IFS='	' read -r idx name; do
+  printf '%s\t%s\n' "$(printf '%s\n' "$name" | slug)" "$idx"
+done | sort -t'	' -k1,1 > "$tmp"
 i=10000
 while IFS='	' read -r _ idx; do
   tmux move-window -s ":$idx" -t ":$i" 2>/dev/null

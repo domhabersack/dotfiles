@@ -225,16 +225,16 @@ local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
 local on_attach = function(_, bufnr)
   local opts = { buffer = bufnr, silent = true }
-  vim.keymap.set('n', 'gd',         vim.lsp.buf.definition,     opts)
-  vim.keymap.set('n', 'gD',         vim.lsp.buf.declaration,    opts)
-  vim.keymap.set('n', 'gr',         vim.lsp.buf.references,     opts)
-  vim.keymap.set('n', 'gi',         vim.lsp.buf.implementation, opts)
-  vim.keymap.set('n', 'K',          vim.lsp.buf.hover,          opts)
-  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename,         opts)
-  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action,    opts)
-  vim.keymap.set('n', '[d',         vim.diagnostic.goto_prev,   opts)
-  vim.keymap.set('n', ']d',         vim.diagnostic.goto_next,   opts)
-  vim.keymap.set('n', '<leader>e',  vim.diagnostic.open_float,  opts)
+  vim.keymap.set('n', 'gd',         vim.lsp.buf.definition,     opts) -- goto definition
+  vim.keymap.set('n', 'gD',         vim.lsp.buf.declaration,    opts) -- goto declaration
+  vim.keymap.set('n', 'gr',         vim.lsp.buf.references,     opts) -- find references
+  vim.keymap.set('n', 'gi',         vim.lsp.buf.implementation, opts) -- goto implementation
+  vim.keymap.set('n', 'K',          vim.lsp.buf.hover,          opts) -- hover docs / type info
+  vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename,         opts) -- rename symbol
+  vim.keymap.set('n', '<leader>ca', vim.lsp.buf.code_action,    opts) -- code actions
+  vim.keymap.set('n', '[d',         vim.diagnostic.goto_prev,   opts) -- prev error/warning
+  vim.keymap.set('n', ']d',         vim.diagnostic.goto_next,   opts) -- next error/warning
+  vim.keymap.set('n', '<leader>e',  vim.diagnostic.open_float,  opts) -- show error detail
 end
 
 -- nvim 0.11+: server configs are auto-loaded from nvim-lspconfig's lsp/ dir.

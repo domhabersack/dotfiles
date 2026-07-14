@@ -198,24 +198,7 @@ fi
 # TMUX         #
 ################
 
-# Show 🦀 in the window list while Claude Code is running in that pane.
-# preexec fires just before a command runs; precmd fires when the prompt returns.
 if [[ -n "$TMUX" ]]; then
-  _claude_preexec() {
-    [[ "$1" != claude* ]] && return
-    tmux set-option -p @tmux_claude 1 2>/dev/null
-    ( ~/.dotfiles/bin/tmux-claude-windows >/dev/null 2>&1 & )
-  }
-  _claude_precmd() {
-    local val
-    val=$(tmux show-options -pqv @tmux_claude 2>/dev/null)
-    [[ "$val" != 1 ]] && return
-    tmux set-option -p @tmux_claude "" 2>/dev/null
-    ( ~/.dotfiles/bin/tmux-claude-windows >/dev/null 2>&1 & )
-  }
-  preexec_functions+=(_claude_preexec)
-  precmd_functions+=(_claude_precmd)
-
   # When a window's shell first enters a repository directory under ~/Developer,
   # rename the tmux window to that repository's root directory name. Because
   # bin/tmux-color-windows and the sort hooks key off the window name, this also
