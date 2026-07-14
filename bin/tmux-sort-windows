@@ -13,15 +13,18 @@ current=$(tmux list-windows -F '#{window_name}' | slug | tr '\n' ' ')
 sorted=$(tmux list-windows -F '#{window_name}' | slug | sort | tr '\n' ' ')
 [ "$current" = "$sorted" ] && exit 0
 
+# Snapshot "window_index TAB window_name", compute every slug in ONE pass (not a
+# subprocess per window), pair each slug with its index, and sort by slug. The
+# trailing window_name column rides along unused and is ignored when reading back.
+snap=$(mktemp)
 tmp=$(mktemp)
-tmux list-windows -F '#{window_index}	#{window_name}' | \
-while IFS='	' read -r idx name; do
-  printf '%s\t%s\n' "$(printf '%s\n' "$name" | slug)" "$idx"
-done | sort -t'	' -k1,1 > "$tmp"
+tmux list-windows -F '#{window_index}	#{window_name}' > "$snap"
+cut -f2 "$snap" | slug | paste - "$snap" | sort -t'	' -k1,1 > "$tmp"
+
 i=10000
-while IFS='	' read -r _ idx; do
+while IFS='	' read -r _ idx _; do
   tmux move-window -s ":$idx" -t ":$i" 2>/dev/null
   i=$((i + 1))
 done < "$tmp"
-rm -f "$tmp"
+rm -f "$snap" "$tmp"
 tmux move-window -r
