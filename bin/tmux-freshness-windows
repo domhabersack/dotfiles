@@ -64,6 +64,14 @@ BEGIN { level[0]="░"; level[1]="▒"; level[2]="▓"; level[3]="█" }
     else                lvl = 0       # still empty
     bar = bar level[lvl]
   }
+
+  # Fade the whole bar color with freshness too: the freshest stage is pure
+  # black (colour0), and each step older steps one level up the xterm grayscale
+  # ramp (colour232 = near-black .. lighter), so old windows dim toward gray.
+  if (stage >= 12) col = 0
+  else             col = 232 + (11 - stage)
+  bar = "#[fg=colour" col "]" bar
+
   print wid "\t" bar
 }' |
 while IFS='	' read -r wid bar; do
