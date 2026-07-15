@@ -68,6 +68,17 @@ program emitting an actual bell character — for Claude Code, set
 `"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
 Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
+Each window-list entry also starts with a four-cell **freshness bar** showing how
+recently that window was accessed, filling right-to-left from `░░░░` (not touched
+in weeks) up through `░░░▒`, `░░░▓`, `░░░█`, `░░▒█` … to `████` (just now) — 13
+stages, each cell stepping `░ → ▒ → ▓ → █`. `bin/tmux-freshness-windows` stamps the
+active window with the current time and maps every window's elapsed time onto the
+bar on a **logarithmic** scale (fine-grained over the first minutes/hours, then
+fading slowly out to ~2 weeks); `bin/tmux-freshness-watch` re-renders on a timer so
+the bars decay even when idle. The bar is decorative only — like a leading marker
+emoji, it is not part of the window name, so it never affects window sorting or
+coloring.
+
 ### Plugins (auto-installed)
 
 On first shell/editor start, plugins install themselves automatically:
