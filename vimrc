@@ -221,7 +221,6 @@ require('mason-lspconfig').setup({
   },
 })
 
-local lspconfig    = require('lspconfig')
 local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
 local on_attach = function(_, bufnr)
@@ -238,9 +237,10 @@ local on_attach = function(_, bufnr)
   vim.keymap.set('n', '<leader>e',  vim.diagnostic.open_float,  opts) -- show error detail
 end
 
-for _, server in ipairs({ 'ts_ls', 'tailwindcss', 'eslint', 'cssls', 'html', 'jsonls' }) do
-  lspconfig[server].setup({ capabilities = capabilities, on_attach = on_attach })
-end
+-- nvim 0.11+: server configs are auto-loaded from nvim-lspconfig's lsp/ dir.
+-- vim.lsp.config('*') applies user overrides to all servers before they start.
+vim.lsp.config('*', { capabilities = capabilities, on_attach = on_attach })
+vim.lsp.enable({ 'ts_ls', 'tailwindcss', 'eslint', 'cssls', 'html', 'jsonls' })
 
 -- diagnostics: inline virtual text + gutter signs + floating preview
 vim.diagnostic.config({
@@ -280,17 +280,27 @@ cmp.setup({
   }),
 })
 
--- treesitter: richer syntax for TypeScript / TSX / JSX / CSS / etc.
-require('nvim-treesitter.configs').setup({
-  ensure_installed = {
-    'typescript', 'tsx', 'javascript',
-    'html', 'css', 'json',
-    'lua', 'vim', 'vimdoc',
-    'yaml', 'markdown', 'markdown_inline',
-    'bash', 'gitignore',
-  },
-  highlight = { enable = true },
-  indent    = { enable = true },
+-- treesitter (nvim-treesitter main branch): the plugin installs parsers but no
+-- longer manages highlighting/indent — we start them per buffer ourselves.
+require('nvim-treesitter.install').install({
+  'typescript', 'tsx', 'javascript',
+  'html', 'css', 'json',
+  'lua', 'vim', 'vimdoc',
+  'yaml', 'markdown', 'markdown_inline',
+  'bash', 'gitignore',
+})
+
+-- Enable treesitter highlighting + indent for any buffer whose filetype has an
+-- installed parser (guarded so filetypes without one fall back to defaults).
+vim.api.nvim_create_autocmd('FileType', {
+  callback = function(args)
+    local lang = vim.treesitter.language.get_lang(vim.bo[args.buf].filetype)
+    -- language.add returns truthy only when the parser is actually installed.
+    if lang and vim.treesitter.language.add(lang) then
+      vim.treesitter.start(args.buf, lang)
+      vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+    end
+  end,
 })
 
 -- format on save with prettier

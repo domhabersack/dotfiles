@@ -1,18 +1,30 @@
 #!/bin/sh
+# Sorts windows alphabetically by their canonical slug (see bin/tmux-window-slug),
+# so a leading marker or trailing task suffix never changes a window's position.
 lock=/tmp/tmux-sort-windows.lock
 mkdir "$lock" 2>/dev/null || exit 0
 trap 'rm -rf "$lock"' EXIT
 
-current=$(tmux list-windows -F '#{window_name}' | tr '\n' ' ')
-sorted=$(tmux list-windows -F '#{window_name}' | sort | tr '\n' ' ')
+slug() {
+  "$HOME/.dotfiles/bin/tmux-window-slug"
+}
+
+current=$(tmux list-windows -F '#{window_name}' | slug | tr '\n' ' ')
+sorted=$(tmux list-windows -F '#{window_name}' | slug | sort | tr '\n' ' ')
 [ "$current" = "$sorted" ] && exit 0
 
+# Snapshot "window_index TAB window_name", compute every slug in ONE pass (not a
+# subprocess per window), pair each slug with its index, and sort by slug. The
+# trailing window_name column rides along unused and is ignored when reading back.
+snap=$(mktemp)
 tmp=$(mktemp)
-tmux list-windows -F '#{window_index} #{window_name}' | sort -k2 > "$tmp"
+tmux list-windows -F '#{window_index}	#{window_name}' > "$snap"
+cut -f2 "$snap" | slug | paste - "$snap" | sort -t'	' -k1,1 > "$tmp"
+
 i=10000
-while IFS=' ' read -r idx rest; do
+while IFS='	' read -r _ idx _; do
   tmux move-window -s ":$idx" -t ":$i" 2>/dev/null
   i=$((i + 1))
 done < "$tmp"
-rm -f "$tmp"
+rm -f "$snap" "$tmp"
 tmux move-window -r

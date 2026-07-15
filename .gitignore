@@ -1,3 +1,4 @@
 *.local
 !*.local.sample
 gitignore_global
+window-colors

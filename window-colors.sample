@@ -1,0 +1,26 @@
+# Assign colors to tmux windows by group. This file is machine-specific:
+# copy it to `window-colors` (same directory) and edit the groups/colors for
+# this machine. `window-colors` itself is gitignored so each machine differs.
+#
+#   cp window-colors.sample window-colors
+#
+# Each group starts with a color header wrapped in brackets, using tmux style
+# syntax: [fg=colourN] or [fg=colourN,bold], etc.
+# List window names one per line beneath it (exact slug match, case-sensitive).
+# A leading marker emoji and trailing task-indicator suffix are ignored when
+# matching. Windows not listed get the default status-line color.
+# Blank lines and #-comment lines are ignored.
+
+# Work project — teal
+[fg=colour6]
+my-api
+my-frontend
+
+# Personal — magenta
+[fg=colour13]
+dotfiles
+shell
+
+# Urgent — red, bold
+[fg=colour9,bold]
+incident-response

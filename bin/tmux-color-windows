@@ -1,0 +1,67 @@
+#!/bin/sh
+# Sets @tmux_color on each window based on ~/.dotfiles/window-colors.
+# window-status-format reads #{@tmux_color} to colorize the status-bar entry.
+# Matching is done on the canonical window slug (see bin/tmux-window-slug), so a
+# leading marker or a trailing task-indicator suffix never breaks color matching.
+
+CONFIG="$HOME/.dotfiles/window-colors"
+SLUG="$HOME/.dotfiles/bin/tmux-window-slug"
+
+# Re-entrancy handling. The lock dir keeps a single run touching windows at a
+# time. If an event fires while a run is in progress, it drops a "pending"
+# marker and exits; the active run notices the marker and re-applies once more
+# before releasing the lock, so a rename mid-run isn't silently lost. (A tiny
+# race remains between the final marker check and lock release; the next window
+# event re-syncs everything, so at worst one window shows a stale color briefly.)
+lock=/tmp/tmux-color-windows.lock
+pending=/tmp/tmux-color-windows.pending
+if ! mkdir "$lock" 2>/dev/null; then
+  : > "$pending"
+  exit 0
+fi
+trap 'rm -rf "$lock"' EXIT
+
+[ -f "$CONFIG" ] || exit 0
+
+tmpfile=$(mktemp /tmp/tmux-color-windows.XXXXXX)
+winfile=$(mktemp /tmp/tmux-color-windows.XXXXXX)
+trap 'rm -f "$tmpfile" "$winfile" "$pending"; rm -rf "$lock"' EXIT
+
+# Build a lookup table: slug TAB color_spec. color_spec is the text between the
+# brackets of the preceding group header, e.g. "fg=colour39".
+current_color=""
+while IFS= read -r line; do
+  # Strip leading/trailing whitespace and skip blank lines and comments.
+  line=$(printf '%s\n' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+  case "$line" in
+    ''|\#*) continue ;;
+    '['*)
+      current_color="${line#[}"
+      current_color="${current_color%]}"
+      ;;
+    *)
+      [ -n "$current_color" ] && printf '%s\t%s\n' "$line" "$current_color" >> "$tmpfile"
+      ;;
+  esac
+done < "$CONFIG"
+
+apply() {
+  # Snapshot every window (all sessions) as "window_id TAB window_name".
+  tmux list-windows -a -F '#{window_id}	#{window_name}' > "$winfile"
+
+  # Reduce all names to slugs in ONE pass (not one subprocess per window), join
+  # each window to its color via awk, then emit "window_id TAB color_spec".
+  cut -f2 "$winfile" | "$SLUG" | paste "$winfile" - | \
+  awk -F'\t' 'NR==FNR { c[$1] = $2; next } { print $1 "\t" ($3 in c ? c[$3] : "") }' "$tmpfile" - | \
+  while IFS='	' read -r wid color; do
+    tmux set-window-option -t "$wid" @tmux_color "$color"
+  done
+}
+
+# Apply now; loop again if more events arrived while we were working.
+rm -f "$pending"
+apply
+while [ -e "$pending" ]; do
+  rm -f "$pending"
+  apply
+done

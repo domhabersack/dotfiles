@@ -19,10 +19,15 @@ for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f ~/.$f
 For neovim, also create the config directory symlink:
 
 ```zsh
-brew install neovim ripgrep fd
+brew install neovim ripgrep fd tree-sitter-cli
 mkdir -p ~/.config/nvim
 ln -s ~/.dotfiles/vimrc ~/.config/nvim/init.vim
 ```
+
+`tree-sitter-cli` is required for syntax highlighting: the `main` branch of
+nvim-treesitter compiles parsers with it. Note it is a **separate** formula from
+`tree-sitter` (which is library-only), and the CLI must come from a package
+manager, not npm.
 
 On first `nvim` launch, vim-plug installs all plugins automatically. Language servers (tsserver, tailwindcss-language-server, eslint, etc.) are then installed by mason on the second launch — check progress with `:Mason`.
 
@@ -37,6 +42,7 @@ Some files are not committed to this repository and must be created on each mach
 | `~/.tmux.conf.local` | local tmux overrides |
 | `~/.vimrc.local` | local vim settings |
 | `~/.zshrc.local` | machine-specific paths, environment variables, aliases |
+| `~/.dotfiles/window-colors` | tmux window color groups (differs per machine — see below) |
 
 Each has a corresponding `.sample` file with placeholder values to use as a starting point. Create the file from each sample, then symlink it into your home directory:
 
@@ -46,6 +52,21 @@ ln -s ~/.dotfiles/gitignore_global ~/.gitignore_global
 for f (gitconfig tmux.conf vimrc zshrc) cp ~/.dotfiles/$f.local.sample ~/.dotfiles/$f.local
 for f (gitconfig tmux.conf vimrc zshrc) ln -s ~/.dotfiles/$f.local ~/.$f.local
 ```
+
+`window-colors` is read in place from `~/.dotfiles/` (no symlink needed) by
+`bin/tmux-color-windows`, so just copy the sample:
+
+```zsh
+cp ~/.dotfiles/window-colors.sample ~/.dotfiles/window-colors
+```
+
+Then edit it to list this machine's own window-name groups and colors.
+
+The window list also shows a 🔔 next to any background window whose pane rings
+the terminal bell (e.g. Claude Code waiting for input). That relies on the
+program emitting an actual bell character — for Claude Code, set
+`"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
+Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
 ### Plugins (auto-installed)
 

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Canonical window slug, shared by tmux-color-windows and tmux-sort-windows so
+# coloring and sorting always agree on a window's identity.
+#
+# Strips any leading marker (a non-alphanumeric prefix, e.g. an emoji like 👉
+# used to flag a window as an "active" project) and any trailing task-indicator
+# suffix, leaving the leading [A-Za-z0-9.-] slug. Reads window names on stdin,
+# one per line; writes one slug per line.
+sed 's/^[^A-Za-z0-9]*//; s/^\([A-Za-z0-9.-]*\).*/\1/'
