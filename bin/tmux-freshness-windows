@@ -21,12 +21,16 @@ now=$(date +%s)
 FRESH=900         # <= this (15 min): brand-new, ████
 STALE=2592000     # >= this (~1 month): ancient, ░░░░
 
-# Stamp the active window of every attached session as accessed "now", so the
-# window you are currently looking at always reads as maximally fresh.
-tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id}' |
-while read -r attached active wid; do
-  [ "$attached" = "1" ] && [ "$active" = "1" ] &&
+# Decide each window's stored access time. The active window of every attached
+# session is (re)stamped "now", so the window you are looking at always reads as
+# maximally fresh. A window that has never been stamped is initialized to "now"
+# so it begins decaying from first sighting — without this it would default to
+# "now" on every render and stay pinned at a full bar forever.
+tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{@last_accessed}' |
+while read -r attached active wid last; do
+  if { [ "$attached" = "1" ] && [ "$active" = "1" ]; } || [ -z "$last" ]; then
     tmux set-window-option -t "$wid" @last_accessed "$now"
+  fi
 done
 
 # Compute the bar for every window in one awk pass, then apply. A window with no
