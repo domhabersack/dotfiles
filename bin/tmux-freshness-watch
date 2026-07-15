@@ -1,0 +1,19 @@
+#!/bin/sh
+# Starts a background ticker that re-renders the window freshness bars on a fixed
+# interval, so they decay over time even when no window events (new/select/rename)
+# are firing to re-run tmux-freshness-windows. Single-instance guarded: safe to
+# call on every config reload.
+
+PIDFILE=/tmp/tmux-freshness-watch.pid
+INTERVAL=60
+
+# Reuse the running ticker if it is still alive.
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  exit 0
+fi
+
+nohup sh -c \
+  'while :; do ~/.dotfiles/bin/tmux-freshness-windows; sleep '"$INTERVAL"'; done' \
+  >/dev/null 2>&1 &
+
+echo $! > "$PIDFILE"

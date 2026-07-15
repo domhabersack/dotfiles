@@ -1,0 +1,75 @@
+#!/bin/sh
+# Renders a per-window "freshness" bar showing how recently each window was
+# accessed: a 4-cell shaded meter that fills right-to-left from ░░░░ (touched
+# long ago) up through ░░░▒, ░░░▓, ░░░█, ░░▒█ ... to ████ (touched just now) —
+# 13 stages in all. Each cell steps ░ → ▒ → ▓ → █ before the next cell to its
+# left begins to darken.
+#
+# Every run stamps the active window of each attached session with the current
+# time (@last_accessed), then maps every window's elapsed time LOGARITHMICALLY
+# onto the 13 stages, so freshness drops off fast at first and then ever more
+# slowly — a window fades over ~2 weeks. The bar is written to @last_accessed's
+# sibling option @freshness, which window-status-format prints at the START of
+# each entry. It is purely decorative: it is NOT part of window_name, so — like
+# a leading marker emoji — it never influences window sorting or coloring.
+
+now=$(date +%s)
+
+# Tunables (seconds). Anything fresher than FRESH shows a full bar; anything
+# older than STALE shows an empty bar. The span between them is spread across
+# the 13 stages on a log scale.
+FRESH=900         # <= this (15 min): brand-new, ████
+STALE=2592000     # >= this (~1 month): ancient, ░░░░
+
+# Decide each window's stored access time. The active window of every attached
+# session is (re)stamped "now", so the window you are looking at always reads as
+# maximally fresh. A window that has never been stamped is initialized to "now"
+# so it begins decaying from first sighting — without this it would default to
+# "now" on every render and stay pinned at a full bar forever.
+tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{@last_accessed}' |
+while read -r attached active wid last; do
+  if { [ "$attached" = "1" ] && [ "$active" = "1" ]; } || [ -z "$last" ]; then
+    tmux set-window-option -t "$wid" @last_accessed "$now"
+  fi
+done
+
+# Compute the bar for every window in one awk pass, then apply. A window with no
+# recorded timestamp (e.g. just restored) is treated as accessed now.
+tmux list-windows -a -F '#{window_id} #{@last_accessed}' |
+awk -v now="$now" -v fresh="$FRESH" -v stale="$STALE" '
+BEGIN { level[0]="░"; level[1]="▒"; level[2]="▓"; level[3]="█" }
+{
+  wid = $1
+  ts  = ($2 == "" ? now : $2)
+  elapsed = now - ts
+  if (elapsed < 0) elapsed = 0
+
+  # elapsed -> stage 0..12, logarithmic between FRESH and STALE.
+  if (elapsed <= fresh)      stage = 12
+  else if (elapsed >= stale) stage = 0
+  else {
+    frac  = log(elapsed / fresh) / log(stale / fresh)   # 0 (fresh) .. 1 (stale)
+    stage = int(12 * (1 - frac) + 0.5)
+  }
+
+  # Render: "full" whole cells filled from the right, one partial cell of shade
+  # "rem" to their left, the rest empty.
+  full = int(stage / 3)
+  rem  = stage % 3
+  bar  = ""
+  for (j = 0; j < 4; j++) {           # left cell (j=0) .. right cell (j=3)
+    r = 3 - j                         # distance from the right edge
+    if      (r <  full) lvl = 3       # fully black
+    else if (r == full) lvl = rem     # the partially-filled cell
+    else                lvl = 0       # still empty
+    bar = bar level[lvl]
+  }
+  print wid "\t" bar
+}' |
+while IFS='	' read -r wid bar; do
+  tmux set-window-option -t "$wid" @freshness "$bar"
+done
+
+# Repaint the status line so the bars update immediately, not just on the next
+# status-interval tick.
+tmux refresh-client -S 2>/dev/null
