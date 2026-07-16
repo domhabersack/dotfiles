@@ -13,6 +13,12 @@
 # each entry. It is purely decorative: it is NOT part of window_name, so — like
 # a leading marker emoji — it never influences window sorting or coloring.
 
+# While bin/tmux-sort-windows is reshuffling windows, its move-window churn
+# transiently changes the active window and fires the select-window hooks that
+# call us. Bail out so we never stamp the wrong window as freshly accessed — the
+# sort reselects the original window and triggers one clean render when it is done.
+[ -d /tmp/tmux-sort-windows.lock ] && exit 0
+
 now=$(date +%s)
 
 # Tunables (seconds). Anything fresher than FRESH shows a full bar; anything
@@ -64,6 +70,16 @@ BEGIN { level[0]="░"; level[1]="▒"; level[2]="▓"; level[3]="█" }
     else                lvl = 0       # still empty
     bar = bar level[lvl]
   }
+
+  # Fade the whole bar color with freshness too: the freshest stage is pure
+  # black (colour0), and each step older steps one level up the xterm grayscale
+  # ramp (colour232 = near-black .. lighter), so old windows dim toward gray.
+  # Wrap the bar in its own fg + trailing reset so @freshness is self-contained:
+  # consumers just print #{@freshness} without having to reset the color after.
+  if (stage >= 12) col = 0
+  else             col = 232 + (11 - stage)
+  bar = "#[fg=colour" col "]" bar "#[default]"
+
   print wid "\t" bar
 }' |
 while IFS='	' read -r wid bar; do
