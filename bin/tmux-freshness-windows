@@ -13,6 +13,12 @@
 # each entry. It is purely decorative: it is NOT part of window_name, so — like
 # a leading marker emoji — it never influences window sorting or coloring.
 
+# While bin/tmux-sort-windows is reshuffling windows, its move-window churn
+# transiently changes the active window and fires the select-window hooks that
+# call us. Bail out so we never stamp the wrong window as freshly accessed — the
+# sort reselects the original window and triggers one clean render when it is done.
+[ -d /tmp/tmux-sort-windows.lock ] && exit 0
+
 now=$(date +%s)
 
 # Tunables (seconds). Anything fresher than FRESH shows a full bar; anything

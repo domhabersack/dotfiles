@@ -13,6 +13,13 @@ current=$(tmux list-windows -F '#{window_name}' | slug | tr '\n' ' ')
 sorted=$(tmux list-windows -F '#{window_name}' | slug | sort | tr '\n' ' ')
 [ "$current" = "$sorted" ] && exit 0
 
+# Remember the window we're on. The reshuffle below can leave the client on a
+# different window, and its move-window churn fires select-window hooks that
+# would otherwise stamp the wrong window as freshly accessed. tmux-freshness-windows
+# skips while our lock is held, so nothing is stamped mid-sort; afterwards we
+# reselect this window and trigger one clean render.
+active=$(tmux list-windows -F '#{window_active} #{window_id}' | awk '$1 == 1 { print $2; exit }')
+
 # Snapshot "window_index TAB window_name", compute every slug in ONE pass (not a
 # subprocess per window), pair each slug with its index, and sort by slug. The
 # trailing window_name column rides along unused and is ignored when reading back.
@@ -28,3 +35,11 @@ while IFS='	' read -r _ idx _; do
 done < "$tmp"
 rm -f "$snap" "$tmp"
 tmux move-window -r
+
+# Return to the window we started on, then release the lock BEFORE rendering so
+# freshness stops skipping — one clean pass restamps the (correct) active window
+# and repaints every bar from the timestamps the reshuffle never touched.
+[ -n "$active" ] && tmux select-window -t "$active" 2>/dev/null
+rm -rf "$lock"
+trap - EXIT
+tmux run-shell -b "$HOME/.dotfiles/bin/tmux-freshness-windows"
