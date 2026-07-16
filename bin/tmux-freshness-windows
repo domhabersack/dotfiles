@@ -74,9 +74,11 @@ BEGIN { level[0]="░"; level[1]="▒"; level[2]="▓"; level[3]="█" }
   # Fade the whole bar color with freshness too: the freshest stage is pure
   # black (colour0), and each step older steps one level up the xterm grayscale
   # ramp (colour232 = near-black .. lighter), so old windows dim toward gray.
+  # Wrap the bar in its own fg + trailing reset so @freshness is self-contained:
+  # consumers just print #{@freshness} without having to reset the color after.
   if (stage >= 12) col = 0
   else             col = 232 + (11 - stage)
-  bar = "#[fg=colour" col "]" bar
+  bar = "#[fg=colour" col "]" bar "#[default]"
 
   print wid "\t" bar
 }' |
