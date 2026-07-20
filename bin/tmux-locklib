@@ -1,0 +1,36 @@
+#!/bin/sh
+# Shared PID-aware advisory locks for the tmux window hooks. Source this file.
+#
+# A lock is a directory whose "pid" file names the process that holds it.
+# Because the owner PID is recorded, a lock left behind by a run that died
+# without cleaning up (SIGKILL, a tmux server restart mid-run, ...) is detected
+# as stale and stolen by the next run. That is the whole point: a leaked lock
+# can never permanently wedge a hook the way a bare `mkdir` lock does.
+#
+#   lock_live    DIR  -> 0 if DIR is a lock currently held by a running process
+#   lock_acquire DIR  -> 0 if we now hold DIR (creating or stealing as needed),
+#                        1 if it is held by a live process (or we lost a steal race)
+#
+# Note on PID reuse: if a dead owner's PID has been recycled by an unrelated
+# process, the lock reads as live and is not stolen. This is rare and self-heals
+# on the next window event, so at worst one render is briefly skipped.
+
+lock_live() {
+  [ -d "$1" ] || return 1
+  _lock_owner=$(cat "$1/pid" 2>/dev/null)
+  [ -n "$_lock_owner" ] && kill -0 "$_lock_owner" 2>/dev/null
+}
+
+lock_acquire() {
+  if mkdir "$1" 2>/dev/null; then
+    echo $$ > "$1/pid"
+    return 0
+  fi
+  lock_live "$1" && return 1     # genuinely held by a running process
+  rm -rf "$1"                    # previous owner is dead — steal the stale lock
+  if mkdir "$1" 2>/dev/null; then
+    echo $$ > "$1/pid"
+    return 0
+  fi
+  return 1                       # lost the steal race; a live sibling will finish
+}
