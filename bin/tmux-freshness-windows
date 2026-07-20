@@ -17,7 +17,10 @@
 # transiently changes the active window and fires the select-window hooks that
 # call us. Bail out so we never stamp the wrong window as freshly accessed — the
 # sort reselects the original window and triggers one clean render when it is done.
-[ -d /tmp/tmux-sort-windows.lock ] && exit 0
+# Check the lock's owner is alive (not just that the dir exists) so a sort killed
+# mid-run can't leave a stale lock that suppresses freshness forever.
+. "$HOME/.dotfiles/bin/tmux-locklib"
+lock_live /tmp/tmux-sort-windows.lock && exit 0
 
 now=$(date +%s)
 

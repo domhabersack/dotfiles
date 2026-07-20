@@ -1,9 +1,13 @@
 #!/bin/sh
 # Sorts windows alphabetically by their canonical slug (see bin/tmux-window-slug),
 # so a leading marker or trailing task suffix never changes a window's position.
+. "$HOME/.dotfiles/bin/tmux-locklib"
+
 lock=/tmp/tmux-sort-windows.lock
-mkdir "$lock" 2>/dev/null || exit 0
-trap 'rm -rf "$lock"' EXIT
+lock_acquire "$lock" || exit 0
+release() { rm -rf "$lock"; }
+trap release EXIT
+trap 'release; exit 130' INT TERM HUP
 
 slug() {
   "$HOME/.dotfiles/bin/tmux-window-slug"
@@ -41,5 +45,5 @@ tmux move-window -r
 # and repaints every bar from the timestamps the reshuffle never touched.
 [ -n "$active" ] && tmux select-window -t "$active" 2>/dev/null
 rm -rf "$lock"
-trap - EXIT
+trap - EXIT INT TERM HUP
 tmux run-shell -b "$HOME/.dotfiles/bin/tmux-freshness-windows"
