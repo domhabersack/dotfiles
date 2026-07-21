@@ -96,6 +96,7 @@ On first shell/editor start, plugins install themselves automatically:
   ln -s ~/.dotfiles/lazygit.yml ~/"Library/Application Support/lazygit/config.yml"
   ```
 - `brew install mosh` — drop-in `ssh` replacement that survives network drops/roaming; use `mosh user@host` in place of `ssh` on flaky connections.
+- `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening the current billing block's usage in a floating popup.
 
 ## Contents
 
