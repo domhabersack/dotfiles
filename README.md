@@ -68,19 +68,28 @@ program emitting an actual bell character — for Claude Code, set
 `"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
 Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
-For Claude Code specifically, two notification types get their own emoji
-instead of the generic 🔔: 🔐 for a pending permission prompt, 💬 for an idle
-prompt (task done, waiting on you). Add this to the `hooks` key in
-`~/.claude/settings.json` (merge it if the key already exists):
+For Claude Code specifically, three notification types get their own emoji
+instead of the generic 🔔: 🔐 for a pending permission prompt or an MCP
+elicitation dialog (both are "blocked, waiting on you" states — just from
+different subsystems), 💬 for an idle prompt (task done, waiting on you). Add
+this to the `hooks` key in `~/.claude/settings.json` (merge it if the key
+already exists):
 
 ```json
 "hooks": {
   "Notification": [
-    { "matcher": "permission_prompt", "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify approval" }] },
-    { "matcher": "idle_prompt",       "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify idle" }] }
+    { "matcher": "permission_prompt",   "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify approval" }] },
+    { "matcher": "idle_prompt",         "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify idle" }] },
+    { "matcher": "elicitation_dialog",  "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify approval" }] }
   ]
 }
 ```
+
+The other notification types (`auth_success`, `elicitation_complete`,
+`elicitation_response`, `agent_needs_input`, `agent_completed`) are left to
+fall back to the plain 🔔: the first three are transient acknowledgements
+with no state worth persisting on a window, and the last two describe a
+different background session rather than the pane's own window.
 
 `bin/tmux-claude-notify` falls back to tmux's well-known install paths if
 `tmux` isn't on `PATH` — worth knowing if your `~/.claude/settings.json` sets

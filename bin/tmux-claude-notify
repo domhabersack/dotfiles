@@ -1,10 +1,13 @@
 #!/bin/sh
 # Invoked by Claude Code's Notification hook (see README) with a short state
-# name ("approval" or "idle") as $1. Stamps the calling pane's window with
-# @claude_notif set to the emoji itself (not just the state name) so the
-# format strings in tmux.conf can print it with a plain existence check
-# instead of a per-state comparison. bin/tmux-claude-notif-clear removes the
-# stamp again once you actually look at the window.
+# name ("approval" or "idle") as $1. Both the permission_prompt and
+# elicitation_dialog matchers map to "approval" — an MCP elicitation dialog is
+# the same "blocked, waiting on you" state as a permission prompt, just from a
+# different subsystem, so they share an emoji. Stamps the calling pane's
+# window with @claude_notif set to the emoji itself (not just the state name)
+# so the format strings in tmux.conf can print it with a plain existence
+# check instead of a per-state comparison. bin/tmux-claude-notif-clear
+# removes the stamp again once you actually look at the window.
 
 # Claude Code hooks run with the "env.PATH" from settings.json, which on this
 # machine doesn't include Homebrew's bin dir — fall back to tmux's well-known
