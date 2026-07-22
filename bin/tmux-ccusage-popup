@@ -1,0 +1,13 @@
+#!/bin/sh
+# ccusage lives under nvm's per-version bin dir, which isn't on PATH in the
+# non-interactive shell tmux spawns for a popup; source nvm.sh to pick up the
+# default version before invoking it.
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+# `--token-limit max` isn't honored by `--active`, so calibrate manually: use
+# the highest total-token count of any past completed block as the limit,
+# giving a percentage-of-quota view (closest ccusage equivalent to /usage)
+# rather than raw token/cost numbers alone.
+limit=$(ccusage blocks -j 2>/dev/null | jq '[.blocks[] | select(.isGap==false and .isActive==false) | .totalTokens] | max // 0')
+ccusage blocks --active --token-limit "$limit"

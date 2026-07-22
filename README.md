@@ -90,12 +90,9 @@ On first shell/editor start, plugins install themselves automatically:
 ### Optional tools
 
 - `brew install zoxide` — smart `cd` with frecency; auto-activated if present.
-- `brew install lazygit` — bound to `prefix g` in tmux, opening in a floating popup. Symlink the theme:
-  ```zsh
-  mkdir -p ~/"Library/Application Support/lazygit"
-  ln -s ~/.dotfiles/lazygit.yml ~/"Library/Application Support/lazygit/config.yml"
-  ```
+- `brew install lazygit` — bound to `prefix g` in tmux, opening in a floating popup.
 - `brew install mosh` — drop-in `ssh` replacement that survives network drops/roaming; use `mosh user@host` in place of `ssh` on flaky connections.
+- `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening the current billing block's usage in a floating popup.
 
 ## Contents
 
