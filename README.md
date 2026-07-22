@@ -68,6 +68,24 @@ program emitting an actual bell character — for Claude Code, set
 `"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
 Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
+For Claude Code specifically, two notification types get their own emoji
+instead of the generic 🔔: 🔐 for a pending permission prompt, 💬 for an idle
+prompt (task done, waiting on you). Add this to the `hooks` key in
+`~/.claude/settings.json` (merge it if the key already exists):
+
+```json
+"hooks": {
+  "Notification": [
+    { "matcher": "permission_prompt", "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify approval" }] },
+    { "matcher": "idle_prompt",       "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify idle" }] }
+  ]
+}
+```
+
+`bin/tmux-claude-notify` falls back to tmux's well-known install paths if
+`tmux` isn't on `PATH` — worth knowing if your `~/.claude/settings.json` sets
+a custom `env.PATH` that excludes it, as this one does.
+
 Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf.local`) can show
 your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each
 session row via `bin/tmux-usage-statusline`. That script only reads

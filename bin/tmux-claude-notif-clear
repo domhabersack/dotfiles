@@ -1,0 +1,15 @@
+#!/bin/sh
+# Clears @claude_notif (set by tmux-claude-notify) for whichever window you are
+# actually looking at, mirroring tmux's own built-in behavior of clearing
+# window_bell_flag once an attached client views the window. Bound to the same
+# hook events bin/tmux-freshness-windows uses to detect "now looking at this
+# window" (after-select-window, session-window-changed).
+
+tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{@claude_notif}' |
+while read -r attached active wid notif; do
+  if [ "$attached" = "1" ] && [ "$active" = "1" ] && [ -n "$notif" ]; then
+    tmux set-window-option -t "$wid" -u @claude_notif
+  fi
+done
+
+tmux refresh-client -S 2>/dev/null

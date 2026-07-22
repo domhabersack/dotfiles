@@ -1,0 +1,34 @@
+#!/bin/sh
+# Invoked by Claude Code's Notification hook (see README) with a short state
+# name ("approval" or "idle") as $1. Stamps the calling pane's window with
+# @claude_notif set to the emoji itself (not just the state name) so the
+# format strings in tmux.conf can print it with a plain existence check
+# instead of a per-state comparison. bin/tmux-claude-notif-clear removes the
+# stamp again once you actually look at the window.
+
+# Claude Code hooks run with the "env.PATH" from settings.json, which on this
+# machine doesn't include Homebrew's bin dir — fall back to tmux's well-known
+# install locations so this still works when invoked as a hook (as opposed to
+# from inside tmux itself, e.g. the other bin/tmux-* scripts, which inherit
+# the shell's normal PATH and so never need this).
+tmux_bin=$(command -v tmux 2>/dev/null)
+if [ -z "$tmux_bin" ]; then
+  for candidate in /opt/homebrew/bin/tmux /usr/local/bin/tmux; do
+    [ -x "$candidate" ] && { tmux_bin="$candidate"; break; }
+  done
+fi
+[ -n "$tmux_bin" ] || exit 0
+
+case "$1" in
+  approval) emoji='🔐' ;;
+  idle)     emoji='💬' ;;
+  *)        exit 0 ;;
+esac
+
+[ -n "$TMUX_PANE" ] || exit 0
+
+wid=$("$tmux_bin" display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null)
+[ -n "$wid" ] || exit 0
+
+"$tmux_bin" set-window-option -t "$wid" @claude_notif "$emoji" 2>/dev/null
+"$tmux_bin" refresh-client -S 2>/dev/null
