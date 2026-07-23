@@ -68,6 +68,59 @@ program emitting an actual bell character — for Claude Code, set
 `"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
 Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
+Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf.local`) can show
+your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each
+session row via `bin/tmux-usage-statusline`. That script only reads
+`~/.claude/.usage-cache.json` — nothing writes it by default. Add a `statusLine`
+hook in `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline.sh"
+  }
+}
+```
+
+and fold this into `~/.claude/statusline.sh` (Claude Code pipes a JSON payload
+into its `statusLine` command on every turn; this pulls the `rate_limits` field
+out of it and caches it for readers outside the session, like tmux):
+
+```sh
+#!/bin/bash
+input=$(cat)
+
+if echo "$input" | jq -e '.rate_limits.five_hour' >/dev/null 2>&1; then
+  _uc_file="$HOME/.claude/.usage-cache.json"
+  _uc_new=$(echo "$input" | jq -c '.rate_limits')
+  _uc_old='{}'
+  if [ -f "$_uc_file" ] && jq -e . "$_uc_file" >/dev/null 2>&1; then
+    _uc_old=$(cat "$_uc_file")
+  fi
+  # Guard against an idle session's stale (lower) snapshot clobbering a
+  # busier session's fresher (higher) one: only accept a write if the window
+  # rolled over (resets_at changed) or the percentage didn't go backwards.
+  _uc_accept=$(jq -n --argjson new "$_uc_new" --argjson old "$_uc_old" '
+    def fresher(key):
+      ($new[key].resets_at // 0) != ($old[key].resets_at // -1)
+      or ($new[key].used_percentage // 0) >= ($old[key].used_percentage // 0);
+    fresher("five_hour") and fresher("seven_day")
+  ')
+  if [ "$_uc_accept" = "true" ]; then
+    _uc_tmp="$_uc_file.$$"
+    echo "$_uc_new" > "$_uc_tmp" && mv -f "$_uc_tmp" "$_uc_file"
+  fi
+fi
+```
+
+The cache is account-wide and shared across every Claude Code session, so it
+only refreshes while at least one session is active; `tmux-usage-statusline`
+appends an age marker once it's gone stale for more than 15 minutes, and
+prints `Claude quota: n/a` if the cache file doesn't exist yet. This snippet
+only handles the caching — fold it into whatever your `statusLine` command
+already renders for its own per-turn display.
+
 Each window-list entry also starts with a four-cell **freshness bar** showing how
 recently that window was accessed, filling right-to-left from `░░░░` (not touched
 in weeks) up through `░░░▒`, `░░░▓`, `░░░█`, `░░▒█` … to `████` (just now) — 13

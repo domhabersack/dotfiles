@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Prints the account-wide Claude quota for a tmux status line, e.g.:
+#   Session (resets 7:10pm): ████░░░░░░░░░░░░░░░░ 19% | Week (resets Friday, 8:00pm): █████████░░░░░░░░░░░ 44%
+#
+# Each bar is a 20-element meter, one element per 5% of usage, colored solid
+# by severity tier (green <50%, yellow <80%, red >=80%) via tmux's native
+# #[fg=...] style tags rather than raw ANSI, so it renders correctly wherever
+# this script's output ends up (status line, mode-tree row, popup).
+#
+# Reads ~/.claude/.usage-cache.json, which is written by a Claude Code
+# statusLine hook from the authoritative rate_limits field (see README for
+# setup). That value is account-wide (shared across all sessions), so it only
+# refreshes while at least one Claude Code session is active. If it hasn't
+# updated in a while, an age marker is appended.
+set -euo pipefail
+
+CACHE="$HOME/.claude/.usage-cache.json"
+STALE_AFTER=900  # seconds; mark the value as stale past this
+
+# No cache yet (quota tracking not set up) — render nothing rather than a
+# permanent placeholder line.
+[ -f "$CACHE" ] || exit 0
+
+read -r s_pct s_reset w_pct w_reset < <(
+  jq -r '"\(.five_hour.used_percentage) \(.five_hour.resets_at) \(.seven_day.used_percentage) \(.seven_day.resets_at)"' "$CACHE"
+)
+s_pct=$(printf '%.0f' "$s_pct")
+w_pct=$(printf '%.0f' "$w_pct")
+
+fmt_time() { date -r "$1" "+%-I:%M%p" | sed 's/AM/am/; s/PM/pm/'; }
+fmt_date() { date -r "$1" "+%A, %-I:%M%p" | sed 's/AM/am/g; s/PM/pm/g'; }
+
+# tmux-native style tags: recognized by the screen writer wherever this
+# script's output ends up (status line, mode-tree row, popup), not just in
+# formats defined directly in tmux.conf.
+color_for_pct() {
+  local pct=$1
+  if (( pct < 50 )); then
+    echo colour2   # green
+  elif (( pct < 80 )); then
+    echo colour3   # yellow
+  else
+    echo colour1   # red
+  fi
+}
+
+# Renders a 20-element bar, each element worth 5% of usage, entirely colored
+# by severity tier.
+bar() {
+  local pct filled empty filled_str empty_str color
+  pct=$(printf '%.0f' "$1")
+  filled=$(( (pct * 20 + 50) / 100 ))
+  (( filled < 0 )) && filled=0
+  (( filled > 20 )) && filled=20
+  empty=$(( 20 - filled ))
+  filled_str=$(printf '%*s' "$filled" '')
+  empty_str=$(printf '%*s' "$empty" '')
+  color=$(color_for_pct "$pct")
+  printf '#[fg=%s]%s%s#[default]' "$color" "${filled_str// /█}" "${empty_str// /░}"
+}
+
+line="Session (resets $(fmt_time "$s_reset")): $(bar "$s_pct") ${s_pct}% | Week (resets $(fmt_date "$w_reset")): $(bar "$w_pct") ${w_pct}%"
+
+age=$(( $(date +%s) - $(stat -f %m "$CACHE") ))
+[ "$age" -gt "$STALE_AFTER" ] && line+=" (⚠ $((age / 60))m old)"
+
+echo "$line"
