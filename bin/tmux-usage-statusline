@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Prints the account-wide Claude quota for a tmux status line, e.g.:
-#   Session (resets 7:10pm): 19% | Week (resets July 24, 8:00pm): 44%
+#   Session (resets 7:10pm): ████████████░░░░░░░░ 19% | Week (resets Friday, 8:00pm): ████████████████░░░░ 44%
+#
+# Each bar is a 20-element meter, one element per 5% of usage, colored solid
+# by severity tier (green <50%, yellow <80%, red >=80%) via tmux's native
+# #[fg=...] style tags rather than raw ANSI, so it renders correctly wherever
+# this script's output ends up (status line, mode-tree row, popup).
 #
 # Reads ~/.claude/.usage-cache.json, which is written by a Claude Code
 # statusLine hook from the authoritative rate_limits field (see README for
@@ -12,7 +17,9 @@ set -euo pipefail
 CACHE="$HOME/.claude/.usage-cache.json"
 STALE_AFTER=900  # seconds; mark the value as stale past this
 
-[ -f "$CACHE" ] || { echo "Claude quota: n/a"; exit 0; }
+# No cache yet (quota tracking not set up) — render nothing rather than a
+# permanent placeholder line.
+[ -f "$CACHE" ] || exit 0
 
 read -r s_pct s_reset w_pct w_reset < <(
   jq -r '"\(.five_hour.used_percentage) \(.five_hour.resets_at) \(.seven_day.used_percentage) \(.seven_day.resets_at)"' "$CACHE"
@@ -21,7 +28,7 @@ s_pct=$(printf '%.0f' "$s_pct")
 w_pct=$(printf '%.0f' "$w_pct")
 
 fmt_time() { date -r "$1" "+%-I:%M%p" | sed 's/AM/am/; s/PM/pm/'; }
-fmt_date() { date -r "$1" "+%B %-d, %-I:%M%p" | sed 's/AM/am/g; s/PM/pm/g'; }
+fmt_date() { date -r "$1" "+%A, %-I:%M%p" | sed 's/AM/am/g; s/PM/pm/g'; }
 
 # tmux-native style tags: recognized by the screen writer wherever this
 # script's output ends up (status line, mode-tree row, popup), not just in
