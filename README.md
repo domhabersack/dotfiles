@@ -93,7 +93,11 @@ different background session rather than the pane's own window.
 
 `bin/tmux-claude-notify` falls back to tmux's well-known install paths if
 `tmux` isn't on `PATH` — worth knowing if your `~/.claude/settings.json` sets
-a custom `env.PATH` that excludes it, as this one does.
+a custom `env.PATH` that excludes it, as this one does. It also skips
+stamping a window you're currently attached to and looking at: notifications
+refire on nearly every turn of an active conversation, far faster than the
+window-selection event that clears the emoji, so flagging the foreground
+window would just show a stuck-looking indicator rather than a useful one.
 
 Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf.local`) can show
 your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each

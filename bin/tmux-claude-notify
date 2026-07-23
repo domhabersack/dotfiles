@@ -33,5 +33,15 @@ esac
 wid=$("$tmux_bin" display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null)
 [ -n "$wid" ] || exit 0
 
+# Skip windows you're already looking at: an indicator telling you to look
+# at the window you're currently in is pointless, and for a window running
+# an active back-and-forth conversation, notifications refire on nearly
+# every turn — stamping this window would just reset the emoji faster than
+# tmux-claude-notif-clear (which only fires on a window-selection event, not
+# on every notification) could ever keep up with.
+state=$("$tmux_bin" display-message -p -t "$wid" '#{session_attached} #{window_active}' 2>/dev/null)
+set -- $state
+[ "$1" = "1" ] && [ "$2" = "1" ] && exit 0
+
 "$tmux_bin" set-window-option -t "$wid" @claude_notif "$emoji" 2>/dev/null
 "$tmux_bin" refresh-client -S 2>/dev/null
