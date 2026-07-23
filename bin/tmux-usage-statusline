@@ -23,9 +23,24 @@ w_pct=$(printf '%.0f' "$w_pct")
 fmt_time() { date -r "$1" "+%-I:%M%p" | sed 's/AM/am/; s/PM/pm/'; }
 fmt_date() { date -r "$1" "+%B %-d, %-I:%M%p" | sed 's/AM/am/g; s/PM/pm/g'; }
 
-# Renders a 20-element bar, each element worth 5% of usage.
+# tmux-native style tags: recognized by the screen writer wherever this
+# script's output ends up (status line, mode-tree row, popup), not just in
+# formats defined directly in tmux.conf.
+color_for_pct() {
+  local pct=$1
+  if (( pct < 50 )); then
+    echo colour2   # green
+  elif (( pct < 80 )); then
+    echo colour3   # yellow
+  else
+    echo colour1   # red
+  fi
+}
+
+# Renders a 20-element bar, each element worth 5% of usage, entirely colored
+# by severity tier.
 bar() {
-  local pct filled empty filled_str empty_str
+  local pct filled empty filled_str empty_str color
   pct=$(printf '%.0f' "$1")
   filled=$(( (pct * 20 + 50) / 100 ))
   (( filled < 0 )) && filled=0
@@ -33,7 +48,8 @@ bar() {
   empty=$(( 20 - filled ))
   filled_str=$(printf '%*s' "$filled" '')
   empty_str=$(printf '%*s' "$empty" '')
-  printf '%s%s' "${filled_str// /█}" "${empty_str// /░}"
+  color=$(color_for_pct "$pct")
+  printf '#[fg=%s]%s%s#[default]' "$color" "${filled_str// /█}" "${empty_str// /░}"
 }
 
 line="Session (resets $(fmt_time "$s_reset")): $(bar "$s_pct") ${s_pct}% | Week (resets $(fmt_date "$w_reset")): $(bar "$w_pct") ${w_pct}%"
