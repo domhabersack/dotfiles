@@ -10,13 +10,11 @@
 #     ever more slowly — a window fades over ~2 weeks.
 #
 #   - COLOR: the whole bar is always a single solid color (never a per-cell
-#     gradient), interpolated through green -> yellow -> orange -> red
-#     across [0, FOURTEEN] (green fading to yellow within hours, then a
-#     slow drift through orange to red by day 14), then falling through to
-#     a grayscale fade for anything older than that, out to STALE. Color is
-#     computed straight off elapsed time, independent of the shape/CELLS
-#     above, so widening or narrowing the bar never affects which color a
-#     given age shows.
+#     gradient), fading with the same stage used for shape above: pure black
+#     (colour0) for the freshest window, stepping one level up the xterm
+#     grayscale ramp (colour232 = near-black .. lighter) for each older
+#     stage, so old windows dim toward gray. Color reinforces the shaded-bar
+#     decay rather than adding a second independent signal.
 #
 # Every run stamps the active window of each attached session with the
 # current time (@last_accessed). The bar is written to @last_accessed's
@@ -36,25 +34,13 @@ lock_live /tmp/tmux-sort-windows.lock && exit 0
 
 now=$(date +%s)
 
-# Tunables (seconds), split by which signal they drive.
-#
-# Shape: anything fresher than FRESH shows a full bar, anything older than
-# STALE shows an empty bar, spread across the stages on a log scale. CELLS
-# is purely the bar's width — it no longer constrains the color palette
-# (color is computed independently of stage/CELLS, see below), so any width
-# is safe.
+# Tunables (seconds). Anything fresher than FRESH shows a full bar; anything
+# older than STALE shows an empty bar. The span between them is spread across
+# the stages on a log scale. CELLS is purely the bar's width — color is
+# derived from the same stage, see below.
 FRESH=900         # <= this (15 min): brand-new, full bar
-STALE=2592000     # >= this (~1 month): ancient, empty bar; also the far end
-                  # of the grayscale tail (see FOURTEEN below)
+STALE=2592000     # >= this (~1 month): ancient, empty bar
 CELLS=6           # bar width in cells; purely cosmetic
-
-# Color: RGB interpolates green -> yellow -> orange -> red across three
-# legs (see the anchor colors below), then falls through to the grayscale
-# tail that fades out the rest of the way to STALE.
-YELLOW_AT=21600   # <= this (6h): green fading to yellow
-ORANGE_AT=604800  # <= this (7d): yellow fading to orange
-FOURTEEN=1209600  # <= this (14d): orange fading to red
-                  # >  this: grayscale, fading out further to STALE above
 
 # Decide each window's stored access time. The active window of every attached
 # session is (re)stamped "now", so the window you are looking at always reads as
@@ -71,20 +57,10 @@ done
 # Compute the bar for every window in one awk pass, then apply. A window with no
 # recorded timestamp (e.g. just restored) is treated as accessed now.
 tmux list-windows -a -F '#{window_id} #{@last_accessed}' |
-awk -v now="$now" -v fresh="$FRESH" -v stale="$STALE" -v cells="$CELLS" \
-    -v yellow_at="$YELLOW_AT" -v orange_at="$ORANGE_AT" -v fourteen="$FOURTEEN" '
+awk -v now="$now" -v fresh="$FRESH" -v stale="$STALE" -v cells="$CELLS" '
 BEGIN {
   level[0]="░"; level[1]="▒"; level[2]="▓"; level[3]="█"
   max_stage = 3 * cells   # top stage = full bar; stages run 0..max_stage
-
-  # Anchor colors: Tailwind CSS v4 500-weight green/yellow/orange/red —
-  # picked over a hand-tuned hue sweep because those are a professionally
-  # designed, genuinely vibrant set (a fixed-saturation HSL sweep kept
-  # landing too muted or too neon depending on the S/L chosen).
-  gR=34;  gG=197; gB=94    # green-500  #22c55e
-  yR=234; yG=179; yB=8     # yellow-500 #eab308
-  oR=249; oG=115; oB=22    # orange-500 #f97316
-  rR=239; rG=68;  rB=68    # red-500    #ef4444
 }
 {
   wid = $1
@@ -114,34 +90,16 @@ BEGIN {
     bar = bar level[lvl]
   }
 
-  # --- Color: a single solid color for the whole bar (never a per-cell
-  # gradient). RGB linearly interpolates across three legs — green->yellow
-  # over [0, YELLOW_AT], yellow->orange over (YELLOW_AT, ORANGE_AT],
-  # orange->red over (ORANGE_AT, FOURTEEN] — through the Tailwind anchors
-  # above. Rendered as 24-bit truecolor so the color lands exactly (no
-  # xterm-256 quantization); tmux transparently falls back to the nearest
-  # xterm-256 color on terminals without RGB support. Beyond FOURTEEN this
-  # is the same grayscale-ramp tail as before, fading out to STALE. Wrap the
-  # bar in its own fg + trailing reset so @freshness is self-contained:
-  # consumers just print #{@freshness} without having to reset the color.
-  if (elapsed <= fourteen) {
-    if (elapsed <= yellow_at) {
-      t = elapsed / yellow_at
-      R = gR + (yR-gR)*t; G = gG + (yG-gG)*t; B = gB + (yB-gB)*t
-    } else if (elapsed <= orange_at) {
-      t = (elapsed - yellow_at) / (orange_at - yellow_at)
-      R = yR + (oR-yR)*t; G = yG + (oG-yG)*t; B = yB + (oB-yB)*t
-    } else {
-      t = (elapsed - orange_at) / (fourteen - orange_at)
-      R = oR + (rR-oR)*t; G = oG + (rG-oG)*t; B = oB + (rB-oB)*t
-    }
-    bar = sprintf("#[fg=#%02x%02x%02x]%s#[default]", int(R+0.5), int(G+0.5), int(B+0.5), bar)
-  } else {
-    fracg = (elapsed - fourteen) / (stale - fourteen)
-    if (fracg > 1) fracg = 1
-    col = 232 + int(fracg * 23 + 0.5)
-    bar = "#[fg=colour" col "]" bar "#[default]"
-  }
+  # --- Color: fade the whole bar color with freshness too, using the same
+  # stage as the shape above: the freshest stage is pure black (colour0),
+  # and each step older steps one level up the xterm grayscale ramp
+  # (colour232 = near-black .. lighter), so old windows dim toward gray.
+  # Wrap the bar in its own fg + trailing reset so @freshness is
+  # self-contained: consumers just print #{@freshness} without having to
+  # reset the color after.
+  if (stage >= max_stage) col = 0
+  else                    col = 232 + (max_stage - 1 - stage)
+  bar = "#[fg=colour" col "]" bar "#[default]"
 
   print wid "\t" bar
 }' |
