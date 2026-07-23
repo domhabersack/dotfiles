@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Prints the account-wide Claude quota for a tmux status line, e.g.:
-#   Session (resets 7:10pm): ████░░░░░░░░░░░░░░░░ 19% | Week (resets Friday, 8pm): █████████░░░░░░░░░░░ 44%
+#   5h (10:20pm) ██░░░░░░░░ 19% · 7d (Wed 8pm) ████░░░░░░ 44%
 #
-# Each bar is a 20-element meter, one element per 5% of usage, colored solid
-# by severity tier (green <50%, yellow <80%, red >=80%) via tmux's native
-# #[fg=...] style tags rather than raw ANSI, so it renders correctly wherever
-# this script's output ends up (status line, mode-tree row, popup).
+# Renders in choose-tree's session row (see README, "setting up the claude
+# usage script"); labels are kept short ("5h"/"7d", no day-name on the 5h
+# reset) since even a 10-element bar per quota makes the row wide on a
+# mobile SSH screen. Each bar is a 10-element meter, one
+# element per 10% of usage, colored solid by severity tier (green <50%,
+# yellow <80%, red >=80%) via tmux's native #[fg=...] style tags rather than
+# raw ANSI, so it renders correctly wherever this script's output ends up
+# (status line, mode-tree row, popup).
 #
 # Reads ~/.claude/.usage-cache.json, which is written by a Claude Code
 # statusLine hook from the authoritative rate_limits field (see README for
@@ -27,8 +31,15 @@ read -r s_pct s_reset w_pct w_reset < <(
 s_pct=$(printf '%.0f' "$s_pct")
 w_pct=$(printf '%.0f' "$w_pct")
 
-fmt_time() { date -r "$1" "+%-I:%M%p" | sed -E 's/:00(AM|PM)/\1/; s/AM/am/; s/PM/pm/'; }
-fmt_date() { date -r "$1" "+%A, %-I:%M%p" | sed -E 's/:00(AM|PM)/\1/; s/AM/am/; s/PM/pm/'; }
+# Drop ":00" on the hour (1pm, not 1:00pm) to keep the row short; keep
+# minutes whenever they're non-zero.
+fmt_ampm() {
+  local fmt='%-I:%M%p'
+  [ "$(date -r "$1" '+%M')" = "00" ] && fmt='%-I%p'
+  date -r "$1" "+$fmt" | sed 's/AM/am/; s/PM/pm/'
+}
+fmt_time() { fmt_ampm "$1"; }
+fmt_date() { echo "$(date -r "$1" "+%a") $(fmt_ampm "$1")"; }
 
 # tmux-native style tags: recognized by the screen writer wherever this
 # script's output ends up (status line, mode-tree row, popup), not just in
@@ -44,22 +55,22 @@ color_for_pct() {
   fi
 }
 
-# Renders a 20-element bar, each element worth 5% of usage, entirely colored
+# Renders a 10-element bar, each element worth 10% of usage, entirely colored
 # by severity tier.
 bar() {
   local pct filled empty filled_str empty_str color
   pct=$(printf '%.0f' "$1")
-  filled=$(( (pct * 20 + 50) / 100 ))
+  filled=$(( (pct * 10 + 50) / 100 ))
   (( filled < 0 )) && filled=0
-  (( filled > 20 )) && filled=20
-  empty=$(( 20 - filled ))
+  (( filled > 10 )) && filled=10
+  empty=$(( 10 - filled ))
   filled_str=$(printf '%*s' "$filled" '')
   empty_str=$(printf '%*s' "$empty" '')
   color=$(color_for_pct "$pct")
   printf '#[fg=%s]%s%s#[default]' "$color" "${filled_str// /█}" "${empty_str// /░}"
 }
 
-line="Session (resets $(fmt_time "$s_reset")): $(bar "$s_pct") ${s_pct}% | Week (resets $(fmt_date "$w_reset")): $(bar "$w_pct") ${w_pct}%"
+line="5h ($(fmt_time "$s_reset")) $(bar "$s_pct") ${s_pct}% · 7d ($(fmt_date "$w_reset")) $(bar "$w_pct") ${w_pct}%"
 
 age=$(( $(date +%s) - $(stat -f %m "$CACHE") ))
 [ "$age" -gt "$STALE_AFTER" ] && line+=" (⚠ $((age / 60))m old)"
