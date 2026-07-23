@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prints the account-wide Claude quota for a tmux status line, e.g.:
-#   Session (resets 7:10pm): ████████████░░░░░░░░ 19% | Week (resets Friday, 8:00pm): ████████████████░░░░ 44%
+#   Session (resets 7:10pm): ████░░░░░░░░░░░░░░░░ 19% | Week (resets Friday, 8:00pm): █████████░░░░░░░░░░░ 44%
 #
 # Each bar is a 20-element meter, one element per 5% of usage, colored solid
 # by severity tier (green <50%, yellow <80%, red >=80%) via tmux's native
