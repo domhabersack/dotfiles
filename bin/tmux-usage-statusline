@@ -15,7 +15,10 @@
 # statusLine hook from the authoritative rate_limits field (see README for
 # setup). That value is account-wide (shared across all sessions), so it only
 # refreshes while at least one Claude Code session is active. If it hasn't
-# updated in a while, an age marker is appended.
+# updated in a while, an age marker is appended. A resets_at in the past means
+# no session has run since that window last rolled over: the 5h clause
+# becomes "no session started yet", and the 7d clause disappears entirely
+# once it's equally stale.
 set -euo pipefail
 
 CACHE="$HOME/.claude/.usage-cache.json"
@@ -56,11 +59,12 @@ color_for_pct() {
 }
 
 # Renders a 10-element bar, each element worth 10% of usage, entirely colored
-# by severity tier.
+# by severity tier. Filled count is a ceiling, not a round: e.g. 30% shows 3
+# blocks, 31% shows 4.
 bar() {
   local pct filled empty filled_str empty_str color
   pct=$(printf '%.0f' "$1")
-  filled=$(( (pct * 10 + 50) / 100 ))
+  filled=$(( (pct + 9) / 10 ))
   (( filled < 0 )) && filled=0
   (( filled > 10 )) && filled=10
   empty=$(( 10 - filled ))
@@ -70,9 +74,21 @@ bar() {
   printf '#[fg=%s]%s%s#[default]' "$color" "${filled_str// /█}" "${empty_str// /░}"
 }
 
-line="5h ($(fmt_time "$s_reset")) $(bar "$s_pct") ${s_pct}% · 7d ($(fmt_date "$w_reset")) $(bar "$w_pct") ${w_pct}%"
+now=$(date +%s)
 
-age=$(( $(date +%s) - $(stat -f %m "$CACHE") ))
+# A resets_at in the past means no session has run since that window rolled
+# over to refresh it — show a placeholder for 5h, and drop the weekly clause
+# entirely once it's in the same boat.
+if (( now > s_reset )); then
+  line="no session started yet"
+else
+  line="5h ($(fmt_time "$s_reset")) $(bar "$s_pct") ${s_pct}%"
+fi
+if (( now <= w_reset )); then
+  line+=" · 7d ($(fmt_date "$w_reset")) $(bar "$w_pct") ${w_pct}%"
+fi
+
+age=$(( now - $(stat -f %m "$CACHE") ))
 [ "$age" -gt "$STALE_AFTER" ] && line+=" (⚠ $((age / 60))m old)"
 
 echo "$line"
