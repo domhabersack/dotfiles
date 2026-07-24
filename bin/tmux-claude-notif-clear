@@ -7,7 +7,7 @@
 
 tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{@claude_notif}' |
 while read -r attached active wid notif; do
-  if [ "$attached" = "1" ] && [ "$active" = "1" ] && [ -n "$notif" ]; then
+  if [ "$attached" -gt 0 ] && [ "$active" = "1" ] && [ -n "$notif" ]; then
     tmux set-window-option -t "$wid" -u @claude_notif
   fi
 done

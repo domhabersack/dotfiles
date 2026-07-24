@@ -41,7 +41,7 @@ wid=$("$tmux_bin" display-message -p -t "$TMUX_PANE" '#{window_id}' 2>/dev/null)
 # on every notification) could ever keep up with.
 state=$("$tmux_bin" display-message -p -t "$wid" '#{session_attached} #{window_active}' 2>/dev/null)
 set -- $state
-[ "$1" = "1" ] && [ "$2" = "1" ] && exit 0
+[ "$1" -gt 0 ] && [ "$2" = "1" ] && exit 0
 
 "$tmux_bin" set-window-option -t "$wid" @claude_notif "$emoji" 2>/dev/null
 "$tmux_bin" refresh-client -S 2>/dev/null
