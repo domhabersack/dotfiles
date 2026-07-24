@@ -14,15 +14,13 @@
 # Reads ~/.claude/.usage-cache.json, which is written by a Claude Code
 # statusLine hook from the authoritative rate_limits field (see README for
 # setup). That value is account-wide (shared across all sessions), so it only
-# refreshes while at least one Claude Code session is active. If it hasn't
-# updated in a while, an age marker is appended. A resets_at in the past means
-# no session has run since that window last rolled over: the 5h clause
-# becomes "no session started yet", and the 7d clause disappears entirely
-# once it's equally stale.
+# refreshes while at least one Claude Code session is active. A resets_at in
+# the past means no session has run since that window last rolled over: the
+# 5h clause becomes "no session started yet", and the 7d clause disappears
+# entirely once it's equally stale.
 set -euo pipefail
 
 CACHE="$HOME/.claude/.usage-cache.json"
-STALE_AFTER=900  # seconds; mark the value as stale past this
 
 # No cache yet (quota tracking not set up) — render nothing rather than a
 # permanent placeholder line.
@@ -87,8 +85,5 @@ fi
 if (( now <= w_reset )); then
   line+=" · 7d ($(fmt_date "$w_reset")) $(bar "$w_pct") ${w_pct}%"
 fi
-
-age=$(( now - $(stat -f %m "$CACHE") ))
-[ "$age" -gt "$STALE_AFTER" ] && line+=" (⚠ $((age / 60))m old)"
 
 echo "$line"
