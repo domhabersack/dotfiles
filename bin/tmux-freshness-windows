@@ -49,7 +49,7 @@ CELLS=6           # bar width in cells; purely cosmetic
 # "now" on every render and stay pinned at a full bar forever.
 tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{@last_accessed}' |
 while read -r attached active wid last; do
-  if { [ "$attached" = "1" ] && [ "$active" = "1" ]; } || [ -z "$last" ]; then
+  if { [ "$attached" -gt 0 ] && [ "$active" = "1" ]; } || [ -z "$last" ]; then
     tmux set-window-option -t "$wid" @last_accessed "$now"
   fi
 done
