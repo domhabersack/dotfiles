@@ -1,0 +1,94 @@
+#!/bin/sh
+# Renders each attached session's active window's repo health (currently:
+# open PR count) into that window's @repo_pr option, read by status-left.
+# e.g.: dotfiles 3 PR
+#
+# Resolution (git remote parsing) and cache reads here are local/fast; the
+# only network call (`gh pr list`, read-only) happens in the detached,
+# lock-guarded bin/tmux-repo-pr-fetch, so this script -- and therefore the
+# status bar redraw that depends on it -- never blocks on the network.
+#
+# Cache: ~/.cache/tmux-repo-pr/<owner>_<repo>.json, one file per repo,
+# {"status":"ok","count":N,"fetched_at":EPOCH} or {"status":"error", ...}.
+# A missing cache renders a loading indicator and kicks off a fetch; a
+# present-but-stale cache renders its last value immediately AND kicks off a
+# refetch in the background -- no flicker back to "loading" on every redraw
+# tick. "error" entries (not a GitHub remote, unauthenticated, rate-limited,
+# network down) render nothing and back off longer before retrying, so an
+# unreachable repo doesn't get reprobed every tick.
+set -eu
+
+CACHE_DIR="$HOME/.cache/tmux-repo-pr"
+OK_TTL=300      # seconds; re-check an ok'd repo's PR count at most this often
+ERROR_TTL=900   # seconds; back off longer after a failed/non-GitHub lookup
+
+command -v gh >/dev/null 2>&1 || {
+  tmux list-windows -a -F '#{window_id}' | while read -r wid; do
+    tmux set-window-option -t "$wid" @repo_pr ''
+  done
+  exit 0
+}
+
+# owner/repo for the git repo at $1, or nothing (nonzero exit) if $1 isn't
+# inside a git repo, has no "origin" remote, or the remote doesn't parse into
+# a clean owner/repo (e.g. deeper-nested GitLab subgroups) -- gh itself will
+# reject a bad slug, so this doesn't need to prove the remote is GitHub.
+resolve_repo() {
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  url=$(git -C "$1" remote get-url origin 2>/dev/null) || return 1
+  [ -n "$url" ] || return 1
+  repo=$(printf '%s' "$url" \
+    | sed -E 's#^[a-zA-Z]+://##; s#^[^@]*@##; s#^[^:/]+[:/]##; s#\.git$##')
+  case "$repo" in
+    */*) printf '%s\n' "$repo" ;;
+    *)   return 1 ;;
+  esac
+}
+
+now=$(date +%s)
+
+tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{pane_current_path}' |
+while read -r attached active wid path; do
+  [ "$attached" -gt 0 ] && [ "$active" = "1" ] || continue
+
+  repo=$(resolve_repo "$path") || { tmux set-window-option -t "$wid" @repo_pr ''; continue; }
+  safe=$(printf '%s' "$repo" | tr '/' '_')
+  cache_file="$CACHE_DIR/$safe.json"
+  short=${repo##*/}
+
+  if [ ! -f "$cache_file" ]; then
+    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour238]$short #[fg=colour4]PR …#[default]"
+    nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
+    continue
+  fi
+
+  line=$(jq -r '"\(.status // "error") \(.count // 0) \(.fetched_at // 0)"' "$cache_file" 2>/dev/null) || line=''
+  if [ -n "$line" ]; then
+    set -- $line
+    st=$1; count=$2; fetched_at=$3
+  else
+    st=error; count=0; fetched_at=0
+  fi
+
+  age=$(( now - fetched_at ))
+  if [ "$st" = ok ]; then
+    if [ "$count" -gt 0 ]; then
+      rendered="#[fg=colour238]$short #[fg=colour4,bold]$count PR#[default]"
+    else
+      rendered="#[fg=colour238]$short 0 PR#[default]"
+    fi
+    ttl=$OK_TTL
+  else
+    rendered=''
+    ttl=$ERROR_TTL
+  fi
+  tmux set-window-option -t "$wid" @repo_pr "$rendered"
+
+  if [ "$age" -gt "$ttl" ]; then
+    nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
+  fi
+done
+
+# Repaint the status line so a freshly-set @repo_pr shows immediately, not
+# just on the next status-interval tick.
+tmux refresh-client -S 2>/dev/null

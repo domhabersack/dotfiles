@@ -1,0 +1,39 @@
+#!/bin/sh
+# One-shot, read-only fetch of a repo's open PR count via `gh`, run detached
+# and lock-guarded so duplicate hooks firing for the same repo (e.g. a
+# pane-switch and a window-switch landing on the same repo at once) can't
+# launch concurrent `gh` calls. Writes the result -- success OR failure -- to
+# that repo's cache file, then re-renders so the status bar picks it up
+# immediately instead of waiting for the next tick.
+#
+# Usage: tmux-repo-pr-fetch <owner/repo>
+set -eu
+
+. "$HOME/.dotfiles/bin/tmux-locklib"
+
+repo=$1
+safe=$(printf '%s' "$repo" | tr '/' '_')
+cache_dir="$HOME/.cache/tmux-repo-pr"
+cache_file="$cache_dir/$safe.json"
+lock_dir="/tmp/tmux-repo-pr-fetch-$safe.lock"
+
+mkdir -p "$cache_dir"
+
+# A fetch for this exact repo is already in flight -- don't duplicate the
+# network call; whichever run holds the lock will write the cache for both.
+lock_acquire "$lock_dir" || exit 0
+trap 'rm -rf "$lock_dir"' EXIT
+
+now=$(date +%s)
+tmp="$cache_file.$$"
+
+# Read-only, no auth mutation, no writes to GitHub -- just the open-PR count.
+if count=$(gh pr list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null); then
+  printf '{"status":"ok","count":%s,"fetched_at":%s}\n' "$count" "$now" > "$tmp" && mv -f "$tmp" "$cache_file"
+else
+  # Covers: not a GitHub remote, unauthenticated, rate-limited, network down.
+  # Cached so tmux-repo-pr backs off instead of reprobing every tick.
+  printf '{"status":"error","fetched_at":%s}\n' "$now" > "$tmp" && mv -f "$tmp" "$cache_file"
+fi
+
+~/.dotfiles/bin/tmux-repo-pr
