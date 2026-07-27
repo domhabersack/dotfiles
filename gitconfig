@@ -18,6 +18,12 @@
   changed = yellow
 [core]
   excludesfile = ~/.gitignore_global
+  # falls back to plain output if delta isn't installed (brew install git-delta)
+  pager = delta
+[interactive]
+  diffFilter = delta --color-only
+[delta]
+  navigate = true
 [credential]
   helper = osxkeychain
 [push]

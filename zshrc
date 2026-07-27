@@ -287,15 +287,25 @@ alias rm='rm -i'
 # PLUGINS      #
 ################
 
+ZSH_PLUGIN_DIR="$HOME/.zsh/plugins"
+
 # fzf — fuzzy finder: Ctrl-R history search, Ctrl-T file picker, Alt-C cd
 if [[ ! -d "$HOME/.fzf" ]] && command -v git >/dev/null 2>&1; then
   git clone --depth 1 https://github.com/junegunn/fzf.git "$HOME/.fzf" \
     && "$HOME/.fzf/install" --key-bindings --completion --no-update-rc --no-bash --no-fish
 fi
 [ -f "$HOME/.fzf.zsh" ] && source "$HOME/.fzf.zsh"
+# bat-powered preview for the Ctrl-T file picker (install with: brew install bat)
+command -v bat >/dev/null 2>&1 && export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-range=:500 {}'"
+
+# fzf-tab — replaces zsh's default tab-completion menu with a fuzzy one; must
+# load after compinit (above) and before zsh-autosuggestions/zsh-syntax-highlighting
+if [[ ! -d "$ZSH_PLUGIN_DIR/fzf-tab" ]] && command -v git >/dev/null 2>&1; then
+  git clone --depth 1 https://github.com/Aloxaf/fzf-tab.git "$ZSH_PLUGIN_DIR/fzf-tab"
+fi
+[ -f "$ZSH_PLUGIN_DIR/fzf-tab/fzf-tab.plugin.zsh" ] && source "$ZSH_PLUGIN_DIR/fzf-tab/fzf-tab.plugin.zsh"
 
 # zsh-autosuggestions and zsh-syntax-highlighting (auto-install on first run)
-ZSH_PLUGIN_DIR="$HOME/.zsh/plugins"
 for _p in zsh-autosuggestions zsh-syntax-highlighting; do
   if [[ ! -d "$ZSH_PLUGIN_DIR/$_p" ]] && command -v git >/dev/null 2>&1; then
     git clone --depth 1 "https://github.com/zsh-users/$_p.git" "$ZSH_PLUGIN_DIR/$_p"
@@ -311,6 +321,12 @@ ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 
 # zoxide — smart cd with frecency (install with: brew install zoxide)
 command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
+
+# bat — colorized cat/man pager (install with: brew install bat)
+if command -v bat >/dev/null 2>&1; then
+  alias cat='bat --paging=never'
+  export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+fi
 
 
 ################
