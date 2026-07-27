@@ -16,7 +16,7 @@
 # setup). That value is account-wide (shared across all sessions), so it only
 # refreshes while at least one Claude Code session is active. A resets_at in
 # the past means no session has run since that window last rolled over: the
-# 5h clause becomes "no session started yet", and the 7d clause disappears
+# 5h clause becomes "no current session", and the 7d clause disappears
 # entirely once it's equally stale.
 set -euo pipefail
 
@@ -78,7 +78,7 @@ now=$(date +%s)
 # over to refresh it — show a placeholder for 5h, and drop the weekly clause
 # entirely once it's in the same boat.
 if (( now > s_reset )); then
-  line="no session started yet"
+  line="no current session"
 else
   line="5h ($(fmt_time "$s_reset")) $(bar "$s_pct") ${s_pct}%"
 fi
