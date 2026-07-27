@@ -1,7 +1,7 @@
 #!/bin/sh
 # Renders each attached session's active window's repo health (currently:
 # open PR count) into that window's @repo_pr option, read by status-left.
-# e.g.: dotfiles 3 PR
+# e.g.: dotfiles 3 PRs (properly pluralized: 0 PRs, 1 PR, 30 PRs)
 #
 # Resolution (git remote parsing) and cache reads here are local/fast; the
 # only network call (`gh pr list`, read-only) happens in the detached,
@@ -72,10 +72,12 @@ while read -r attached active wid path; do
 
   age=$(( now - fetched_at ))
   if [ "$st" = ok ]; then
+    label=PRs
+    [ "$count" -eq 1 ] && label=PR
     if [ "$count" -gt 0 ]; then
-      rendered="#[fg=colour238]$short #[fg=colour4,bold]$count PR#[default]"
+      rendered="#[fg=colour238]$short #[fg=colour4,bold]$count $label#[default]"
     else
-      rendered="#[fg=colour238]$short 0 PR#[default]"
+      rendered="#[fg=colour238]$short 0 $label#[default]"
     fi
     ttl=$OK_TTL
   else

@@ -182,7 +182,7 @@ emoji, it is not part of the window name, so it never affects window sorting or
 coloring.
 
 `status-left` shows the open pull request count for whichever repo the
-currently active pane is in, e.g. `dotfiles 3 PR`, via `bin/tmux-repo-pr`
+currently active pane is in, e.g. `dotfiles 3 PRs`, via `bin/tmux-repo-pr`
 (the renderer, triggered on window/pane switches and a background ticker)
 and `bin/tmux-repo-pr-fetch` (the only thing that touches the network — a
 single read-only `gh pr list --repo owner/repo --state open`, no mutating
