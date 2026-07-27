@@ -22,7 +22,7 @@ if ! lock_acquire "$lock"; then
   : > "$pending"
   exit 0
 fi
-# shellcheck disable=SC2329 # invoked via the trap below on the early-exit path at line 28, before redefinition
+# shellcheck disable=SC2329,SC2317 # invoked via the trap below on the early-exit path at line 28, before redefinition (code differs by shellcheck version)
 release() { rm -rf "$lock"; }
 trap release EXIT
 trap 'release; exit 130' INT TERM HUP
