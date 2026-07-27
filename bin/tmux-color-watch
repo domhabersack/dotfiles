@@ -14,6 +14,7 @@ if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   exit 0
 fi
 
+# shellcheck disable=SC2016 # single-quoted on purpose: $CONFIG must expand in the child sh -c, not here
 CONFIG="$CONFIG" nohup sh -c \
   'fswatch -o "$CONFIG" | while read -r _; do ~/.dotfiles/bin/tmux-color-windows; done' \
   >/dev/null 2>&1 &
