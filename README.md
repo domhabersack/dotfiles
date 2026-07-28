@@ -185,7 +185,7 @@ coloring.
 repo the currently active pane is in, e.g.:
 
 ```
-dotfiles 3 PRs (2 human, 1 bot) · 5 vulns (2 critical, 1 high, 2 medium)
+dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 ```
 
 via `bin/tmux-repo-pr` (the renderer, triggered on window/pane switches and a
@@ -201,16 +201,17 @@ native `#[fg=...]` style tags:
 - **Vulnerabilities** are open Dependabot alerts, deduplicated by package
   (multiple CVEs on the same dependency collapse to one entry at its highest
   severity, mirroring `deduplicateAlerts`) and bucketed by severity —
-  critical (red), high (orange), medium (yellow), low (dark yellow), unknown
-  (dim) — shown highest-severity-first, only non-zero buckets. Zero shows a
-  reassuring green `none vulns` rather than nothing, so you can tell the
-  check ran.
+  critical (`colour196`, red), high (`colour202`, orange), medium
+  (`colour220`, yellow), low (dark yellow), unknown (dim) — shown
+  highest-severity-first, only non-zero buckets. Zero shows a reassuring
+  green (`colour34`) `no known vulnerabilities` rather than nothing, so you
+  can tell the check ran.
 
 PR listing and vulnerability-alert access are **independent GitHub
 permissions** — a repo can allow one and deny the other (PRs are visible to
 anyone with read access; alerts need collaborator-level access on that
 specific repo) — so each half is fetched, cached, and rendered independently:
-a repo shows PRs only, vulns only, both, or (most commonly, for a repo this
+a repo shows PRs only, vulnerabilities only, both, or (most commonly, for a repo this
 account isn't a collaborator on) neither, with no crash or error text either
 way. Also degrades to rendering nothing if `gh` is missing, the pane isn't
 inside a git repo, the repo has no remote, or the active window belongs to a

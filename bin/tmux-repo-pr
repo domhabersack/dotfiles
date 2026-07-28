@@ -1,7 +1,7 @@
 #!/bin/sh
 # Renders each attached session's active window's repo health into that
 # window's @repo_pr option, read by status-left:
-#   dotfiles 3 PRs (2 human, 1 bot) · 5 vulns (2 critical, 1 high, 2 medium)
+#   dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 #
 # Mirrors ~/Developer/mission-status's line format and severity color scheme
 # (see bin/tmux-repo-pr-fetch for the exact classification/dedup rules),
@@ -97,18 +97,18 @@ while read -r attached active wid path; do
   vuln_part=''
   if [ "$vuln_status" = ok ]; then
     if [ "$vuln_total" -eq 0 ]; then
-      vuln_part='#[fg=colour2]none#[default] vulns'
+      vuln_part='#[fg=colour34]no known vulnerabilities#[default]'
     else
       # Comma-joined severity list, highest-severity first, only including
       # non-zero buckets -- mirrors mission-status's severityParts.
       sevs=''
-      for triple in "$vuln_critical critical fg=colour1" "$vuln_high high fg=colour208" "$vuln_medium medium fg=colour3" "$vuln_low low fg=colour136" "$vuln_unknown unknown dim"; do
+      for triple in "$vuln_critical critical fg=colour196" "$vuln_high high fg=colour202" "$vuln_medium medium fg=colour220" "$vuln_low low fg=colour136" "$vuln_unknown unknown dim"; do
         set -- $triple
         part=$(sev_part "$1" "$2" "$3") || continue
         sevs="${sevs:+$sevs, }$part"
       done
-      vuln_label=vulns
-      [ "$vuln_total" -eq 1 ] && vuln_label=vuln
+      vuln_label=vulnerabilities
+      [ "$vuln_total" -eq 1 ] && vuln_label=vulnerability
       vuln_part="#[bold]$vuln_total $vuln_label#[nobold] ($sevs)"
     fi
   fi
