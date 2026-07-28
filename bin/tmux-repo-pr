@@ -102,7 +102,7 @@ while read -r attached active wid path; do
       # Comma-joined severity list, highest-severity first, only including
       # non-zero buckets -- mirrors mission-status's severityParts.
       sevs=''
-      for triple in "$vuln_critical critical fg=colour196" "$vuln_high high fg=colour202" "$vuln_medium medium fg=colour220" "$vuln_low low fg=colour136" "$vuln_unknown unknown dim"; do
+      for triple in "$vuln_critical critical fg=colour1" "$vuln_high high fg=colour166" "$vuln_medium medium fg=colour3" "$vuln_low low fg=colour94" "$vuln_unknown unknown dim"; do
         set -- $triple
         part=$(sev_part "$1" "$2" "$3") || continue
         sevs="${sevs:+$sevs, }$part"
