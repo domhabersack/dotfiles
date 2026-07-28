@@ -202,7 +202,7 @@ native `#[fg=...]` style tags:
   (multiple CVEs on the same dependency collapse to one entry at its highest
   severity, mirroring `deduplicateAlerts`) and bucketed by severity —
   critical (`colour196`, red), high (`colour208`, orange), medium
-  (`colour220`, yellow), low (`colour94`, dark yellow/brown), unknown (dim) — shown
+  (`colour214`, yellow), low (`colour130`, dark yellow/brown), unknown (dim) — shown
   highest-severity-first, only non-zero buckets. Zero shows a reassuring
   green (`colour34`) `no known vulnerabilities` rather than nothing, so you
   can tell the check ran.
