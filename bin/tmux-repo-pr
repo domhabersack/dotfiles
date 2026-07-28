@@ -115,7 +115,7 @@ while read -r attached active wid path; do
 
   data="${pr_part}${pr_part:+${vuln_part:+ · }}${vuln_part}"
   if [ -n "$data" ]; then
-    rendered="#[fg=colour238]$short#[default] $data"
+    rendered="#[fg=colour238]$short#[default] · $data"
   else
     rendered=''
   fi
