@@ -181,29 +181,49 @@ the bars decay even when idle. The bar is decorative only — like a leading mar
 emoji, it is not part of the window name, so it never affects window sorting or
 coloring.
 
-`status-left` shows the open pull request count for whichever repo the
-currently active pane is in, e.g. `dotfiles 3 PRs`, via `bin/tmux-repo-pr`
-(the renderer, triggered on window/pane switches and a background ticker)
-and `bin/tmux-repo-pr-fetch` (the only thing that touches the network — a
-single read-only `gh pr list --repo owner/repo --state open`, no mutating
-calls of any kind). Requires the `gh` CLI installed and `gh auth login` run
-once; degrades to rendering nothing if `gh` is missing, the pane isn't inside
-a git repo, the repo has no remote, the remote isn't reachable via `gh`
-(non-GitHub host, unauthenticated, rate-limited, network down), or the
-active window belongs to a detached session.
+`status-left` shows open PR and Dependabot-vulnerability counts for whichever
+repo the currently active pane is in, e.g.:
 
-Results are cached per-repo under `~/.cache/tmux-repo-pr/` so the status bar
-never blocks on the network: a repo seen for the first time shows a loading
-indicator while the background fetch runs, and every render after that shows
-the last cached count instantly, refreshing in the background roughly every
-5 minutes (15 minutes after a failed lookup, so an unreachable/non-GitHub
-remote isn't reprobed every tick). No Claude/settings.json hook needed —
-this is independent of the quota feature above.
+```
+dotfiles 3 PRs (2 human, 1 bot) · 5 vulns (2 critical, 1 high, 2 medium)
+```
 
-Dependabot/vulnerability alert counts are **not** included yet: the GitHub
-API's alerts endpoint returned a 403 in testing even for a public repo,
-needing elevated (collaborator/admin-level) access on each target repo
-rather than just a broader `gh auth` scope — revisit once that's sorted.
+via `bin/tmux-repo-pr` (the renderer, triggered on window/pane switches and a
+background ticker) and `bin/tmux-repo-pr-fetch` (the only thing that touches
+the network — two read-only `gh api` calls, no mutating calls of any kind).
+Both halves mirror
+[`mission-status`](https://github.com/sueddeutsche/mission-status)'s
+classification and severity color scheme, translated from raw ANSI to tmux's
+native `#[fg=...]` style tags:
+
+- **PRs** split human vs. bot (a `dependabot/`/`renovate/` branch prefix or
+  matching bot login counts as bot), mirroring `IsBotPR`.
+- **Vulnerabilities** are open Dependabot alerts, deduplicated by package
+  (multiple CVEs on the same dependency collapse to one entry at its highest
+  severity, mirroring `deduplicateAlerts`) and bucketed by severity —
+  critical (red), high (orange), medium (yellow), low (dark yellow), unknown
+  (dim) — shown highest-severity-first, only non-zero buckets. Zero shows a
+  reassuring green `none vulns` rather than nothing, so you can tell the
+  check ran.
+
+PR listing and vulnerability-alert access are **independent GitHub
+permissions** — a repo can allow one and deny the other (PRs are visible to
+anyone with read access; alerts need collaborator-level access on that
+specific repo) — so each half is fetched, cached, and rendered independently:
+a repo shows PRs only, vulns only, both, or (most commonly, for a repo this
+account isn't a collaborator on) neither, with no crash or error text either
+way. Also degrades to rendering nothing if `gh` is missing, the pane isn't
+inside a git repo, the repo has no remote, or the active window belongs to a
+detached session.
+
+Requires the `gh` CLI installed and `gh auth login` run once. Results are
+cached per-repo under `~/.cache/tmux-repo-pr/` so the status bar never blocks
+on the network: a repo seen for the first time shows a loading indicator
+while the background fetch runs, and every render after that shows the last
+cached values instantly, refreshing in the background roughly every 5
+minutes (15 minutes if either half errored, so an inaccessible repo isn't
+reprobed every tick). No Claude/settings.json hook needed — this is
+independent of the quota feature above.
 
 ### Plugins (auto-installed)
 

@@ -1,10 +1,16 @@
 #!/bin/sh
-# One-shot, read-only fetch of a repo's open PR count via `gh`, run detached
-# and lock-guarded so duplicate hooks firing for the same repo (e.g. a
-# pane-switch and a window-switch landing on the same repo at once) can't
-# launch concurrent `gh` calls. Writes the result -- success OR failure -- to
-# that repo's cache file, then re-renders so the status bar picks it up
-# immediately instead of waiting for the next tick.
+# One-shot, read-only fetch of a repo's open-PR (human vs bot) and
+# deduplicated Dependabot vulnerability-alert (by severity) counts via `gh`,
+# run detached and lock-guarded so duplicate hooks firing for the same repo
+# can't launch concurrent `gh` calls. Mirrors ~/Developer/mission-status's
+# classification (internal/github/prs.go IsBotPR, internal/github/vulns.go
+# deduplicateAlerts) and severity color scheme (internal/render/color.go),
+# translated from raw ANSI to tmux's #[fg=...] style tags.
+#
+# PR listing and vulnerability-alert access are independent GitHub
+# permissions -- a repo can allow one and deny the other (e.g. PRs are
+# public, but alerts need collaborator access) -- so each is fetched and
+# cached with its own status; a failure in one doesn't blank the other.
 #
 # Usage: tmux-repo-pr-fetch <owner/repo>
 set -eu
@@ -20,20 +26,80 @@ lock_dir="/tmp/tmux-repo-pr-fetch-$safe.lock"
 mkdir -p "$cache_dir"
 
 # A fetch for this exact repo is already in flight -- don't duplicate the
-# network call; whichever run holds the lock will write the cache for both.
+# network calls; whichever run holds the lock will write the cache for both.
 lock_acquire "$lock_dir" || exit 0
 trap 'rm -rf "$lock_dir"' EXIT
 
 now=$(date +%s)
-tmp="$cache_file.$$"
 
-# Read-only, no auth mutation, no writes to GitHub -- just the open-PR count.
-if count=$(gh pr list --repo "$repo" --state open --json number --jq 'length' 2>/dev/null); then
-  printf '{"status":"ok","count":%s,"fetched_at":%s}\n' "$count" "$now" > "$tmp" && mv -f "$tmp" "$cache_file"
+# --- Open PRs, split human vs bot: a dependabot/renovate branch prefix or
+# author login counts as bot, same rule as mission-status's IsBotPR. The
+# assignment is the `if` condition (not checked via $? afterward) so a
+# non-zero exit here -- an expected case, not a bug -- doesn't trip `set -e`.
+if pr_raw=$(gh api "repos/$repo/pulls?state=open&per_page=100" --paginate 2>/dev/null); then
+  pr_json=$(printf '%s' "$pr_raw" | jq -s '
+    add // [] | {
+      total: length,
+      bot: ([.[] | select(
+        ((.head.ref // "") | test("^(dependabot|renovate)/"))
+        or (((.user.login // "") | ascii_downcase) as $l | $l == "dependabot[bot]" or $l == "renovate[bot]")
+      )] | length)
+    }
+  ')
+  pr_status=ok
+  pr_total=$(printf '%s' "$pr_json" | jq -r '.total')
+  pr_bot=$(printf '%s' "$pr_json" | jq -r '.bot')
+  pr_human=$(( pr_total - pr_bot ))
 else
-  # Covers: not a GitHub remote, unauthenticated, rate-limited, network down.
-  # Cached so tmux-repo-pr backs off instead of reprobing every tick.
-  printf '{"status":"error","fetched_at":%s}\n' "$now" > "$tmp" && mv -f "$tmp" "$cache_file"
+  pr_status=error
+  pr_total=0; pr_human=0; pr_bot=0
 fi
+
+# --- Open Dependabot alerts, deduplicated by package (highest severity per
+# package wins, same rule as mission-status's deduplicateAlerts), bucketed
+# by severity. 403/404 (alerts disabled, or this account lacks the
+# collaborator-level access alerts require) is an expected, common outcome
+# -- most repos this account isn't a collaborator on will hit this path.
+if vuln_raw=$(gh api "repos/$repo/dependabot/alerts?state=open&per_page=100" --paginate 2>/dev/null); then
+  vuln_json=$(printf '%s' "$vuln_raw" | jq -s '
+    add // [] |
+    [.[] | select(.state=="open") | {
+      key: (.dependency.package.ecosystem + "/" + .dependency.package.name),
+      sev: (((.security_advisory.severity // "unknown") | ascii_downcase) as $s |
+            if ($s | IN("critical","high","medium","low")) then $s else "unknown" end)
+    }]
+    | group_by(.key)
+    | map(max_by(.sev | {"critical":4,"high":3,"medium":2,"low":1,"unknown":0}[.]))
+    | {
+        total:    length,
+        critical: (map(select(.sev=="critical")) | length),
+        high:     (map(select(.sev=="high"))     | length),
+        medium:   (map(select(.sev=="medium"))   | length),
+        low:      (map(select(.sev=="low"))      | length),
+        unknown:  (map(select(.sev=="unknown"))  | length)
+      }
+  ')
+  vuln_status=ok
+else
+  vuln_status=error
+  vuln_json='{"total":0,"critical":0,"high":0,"medium":0,"low":0,"unknown":0}'
+fi
+
+tmp="$cache_file.$$"
+jq -n \
+  --arg pr_status "$pr_status" \
+  --argjson pr_total "$pr_total" \
+  --argjson pr_human "$pr_human" \
+  --argjson pr_bot "$pr_bot" \
+  --arg vuln_status "$vuln_status" \
+  --argjson vuln "$vuln_json" \
+  --argjson fetched_at "$now" \
+  '{
+    fetched_at: $fetched_at,
+    pr_status: $pr_status, pr_total: $pr_total, pr_human: $pr_human, pr_bot: $pr_bot,
+    vuln_status: $vuln_status,
+    vuln_total: $vuln.total, vuln_critical: $vuln.critical, vuln_high: $vuln.high,
+    vuln_medium: $vuln.medium, vuln_low: $vuln.low, vuln_unknown: $vuln.unknown
+  }' > "$tmp" && mv -f "$tmp" "$cache_file"
 
 ~/.dotfiles/bin/tmux-repo-pr

@@ -1,26 +1,31 @@
 #!/bin/sh
-# Renders each attached session's active window's repo health (currently:
-# open PR count) into that window's @repo_pr option, read by status-left.
-# e.g.: dotfiles 3 PRs (properly pluralized: 0 PRs, 1 PR, 30 PRs)
+# Renders each attached session's active window's repo health into that
+# window's @repo_pr option, read by status-left:
+#   dotfiles 3 PRs (2 human, 1 bot) · 5 vulns (2 critical, 1 high, 2 medium)
+#
+# Mirrors ~/Developer/mission-status's line format and severity color scheme
+# (see bin/tmux-repo-pr-fetch for the exact classification/dedup rules),
+# adapted to tmux's #[fg=...] style tags and abbreviated for status-left's
+# width. Open-PR count and open-vulnerability count are independent GitHub
+# permissions and rendered independently: a repo can show one, both, or
+# (most commonly, for a repo this account isn't a collaborator on) neither.
 #
 # Resolution (git remote parsing) and cache reads here are local/fast; the
-# only network call (`gh pr list`, read-only) happens in the detached,
+# only network calls (via `gh`, read-only) happen in the detached,
 # lock-guarded bin/tmux-repo-pr-fetch, so this script -- and therefore the
 # status bar redraw that depends on it -- never blocks on the network.
 #
-# Cache: ~/.cache/tmux-repo-pr/<owner>_<repo>.json, one file per repo,
-# {"status":"ok","count":N,"fetched_at":EPOCH} or {"status":"error", ...}.
-# A missing cache renders a loading indicator and kicks off a fetch; a
+# Cache: ~/.cache/tmux-repo-pr/<owner>_<repo>.json, one file per repo. A
+# missing cache renders a loading indicator and kicks off a fetch; a
 # present-but-stale cache renders its last value immediately AND kicks off a
 # refetch in the background -- no flicker back to "loading" on every redraw
-# tick. "error" entries (not a GitHub remote, unauthenticated, rate-limited,
-# network down) render nothing and back off longer before retrying, so an
-# unreachable repo doesn't get reprobed every tick.
+# tick. If either half errored (not accessible, rate-limited, network down),
+# that half renders nothing and backs off longer before retrying.
 set -eu
 
 CACHE_DIR="$HOME/.cache/tmux-repo-pr"
-OK_TTL=300      # seconds; re-check an ok'd repo's PR count at most this often
-ERROR_TTL=900   # seconds; back off longer after a failed/non-GitHub lookup
+OK_TTL=300      # seconds; re-check a fully-ok'd repo at most this often
+ERROR_TTL=900   # seconds; back off longer if either half errored
 
 command -v gh >/dev/null 2>&1 || {
   tmux list-windows -a -F '#{window_id}' | while read -r wid; do
@@ -45,6 +50,13 @@ resolve_repo() {
   esac
 }
 
+# One colored "N label" segment, or nothing if count is 0. $1=count $2=label
+# $3=tmux style (e.g. "fg=colour1" or "dim").
+sev_part() {
+  [ "$1" -gt 0 ] || return 1
+  printf '#[%s]%s %s#[default]' "$3" "$1" "$2"
+}
+
 now=$(date +%s)
 
 tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{pane_current_path}' |
@@ -57,35 +69,60 @@ while read -r attached active wid path; do
   short=${repo##*/}
 
   if [ ! -f "$cache_file" ]; then
-    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour238]$short #[fg=colour4]PR …#[default]"
+    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour250]$short #[fg=colour4]…#[default]"
     nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
     continue
   fi
 
-  line=$(jq -r '"\(.status // "error") \(.count // 0) \(.fetched_at // 0)"' "$cache_file" 2>/dev/null) || line=''
+  line=$(jq -r '"\(.pr_status // "error") \(.pr_total // 0) \(.pr_human // 0) \(.pr_bot // 0) \(.vuln_status // "error") \(.vuln_total // 0) \(.vuln_critical // 0) \(.vuln_high // 0) \(.vuln_medium // 0) \(.vuln_low // 0) \(.vuln_unknown // 0) \(.fetched_at // 0)"' "$cache_file" 2>/dev/null) || line=''
   if [ -n "$line" ]; then
     set -- $line
-    st=$1; count=$2; fetched_at=$3
+    pr_status=$1; pr_total=$2; pr_human=$3; pr_bot=$4
+    vuln_status=$5; vuln_total=$6; vuln_critical=$7; vuln_high=$8; vuln_medium=$9
+    shift 9
+    vuln_low=$1; vuln_unknown=$2; fetched_at=$3
   else
-    st=error; count=0; fetched_at=0
+    pr_status=error; pr_total=0; pr_human=0; pr_bot=0
+    vuln_status=error; vuln_total=0; vuln_critical=0; vuln_high=0; vuln_medium=0
+    vuln_low=0; vuln_unknown=0; fetched_at=0
   fi
 
-  age=$(( now - fetched_at ))
-  if [ "$st" = ok ]; then
+  pr_part=''
+  if [ "$pr_status" = ok ]; then
     label=PRs
-    [ "$count" -eq 1 ] && label=PR
-    if [ "$count" -gt 0 ]; then
-      rendered="#[fg=colour238]$short #[fg=colour4,bold]$count $label#[default]"
+    [ "$pr_total" -eq 1 ] && label=PR
+    pr_part="#[bold]$pr_total $label#[nobold] (#[fg=colour6]$pr_human#[default] human, #[fg=colour6]$pr_bot#[default] bot)"
+  fi
+
+  vuln_part=''
+  if [ "$vuln_status" = ok ]; then
+    if [ "$vuln_total" -eq 0 ]; then
+      vuln_part='#[fg=colour2]none#[default] vulns'
     else
-      rendered="#[fg=colour238]$short 0 $label#[default]"
+      # Comma-joined severity list, highest-severity first, only including
+      # non-zero buckets -- mirrors mission-status's severityParts.
+      sevs=''
+      for triple in "$vuln_critical critical fg=colour1" "$vuln_high high fg=colour208" "$vuln_medium medium fg=colour3" "$vuln_low low fg=colour136" "$vuln_unknown unknown dim"; do
+        set -- $triple
+        part=$(sev_part "$1" "$2" "$3") || continue
+        sevs="${sevs:+$sevs, }$part"
+      done
+      vuln_label=vulns
+      [ "$vuln_total" -eq 1 ] && vuln_label=vuln
+      vuln_part="#[bold]$vuln_total $vuln_label#[nobold] ($sevs)"
     fi
-    ttl=$OK_TTL
+  fi
+
+  data="${pr_part}${pr_part:+${vuln_part:+ · }}${vuln_part}"
+  if [ -n "$data" ]; then
+    rendered="#[fg=colour250]$short#[default] $data"
   else
     rendered=''
-    ttl=$ERROR_TTL
   fi
   tmux set-window-option -t "$wid" @repo_pr "$rendered"
 
+  age=$(( now - fetched_at ))
+  if [ "$pr_status" = ok ] && [ "$vuln_status" = ok ]; then ttl=$OK_TTL; else ttl=$ERROR_TTL; fi
   if [ "$age" -gt "$ttl" ]; then
     nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
   fi
