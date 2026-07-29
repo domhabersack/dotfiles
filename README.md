@@ -167,7 +167,7 @@ coloring.
 
 On first shell/editor start, plugins install themselves automatically:
 
-- **fzf** + **zsh-autosuggestions** + **zsh-syntax-highlighting** — cloned by `zshrc` on first shell start (same pattern as TPM in `tmux.conf`).
+- **fzf** + **fzf-tab** + **zsh-autosuggestions** + **zsh-syntax-highlighting** — cloned by `zshrc` on first shell start (same pattern as TPM in `tmux.conf`).
 - **vim-plug** — bootstrapped by `vimrc` on first `nvim` launch; all plugins install automatically.
 - **Language servers** (tsserver, tailwindcss, eslint, cssls, html, jsonls) — installed by mason on the second `nvim` launch.
 
@@ -177,6 +177,8 @@ On first shell/editor start, plugins install themselves automatically:
 - `brew install lazygit` — bound to `prefix g` in tmux, opening in a floating popup.
 - `brew install mosh` — drop-in `ssh` replacement that survives network drops/roaming; use `mosh user@host` in place of `ssh` on flaky connections.
 - `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening the current billing block's usage in a floating popup.
+- `brew install git-delta` — syntax-highlighted, line-level diffs for `git diff`/`git log`/`git show`; falls back to git's plain output if not installed.
+- `brew install bat` — colorized `cat`/man-page replacement; also powers the preview pane in fzf's Ctrl-T file picker.
 
 ## Contents
 
