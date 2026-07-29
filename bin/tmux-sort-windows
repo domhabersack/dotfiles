@@ -1,6 +1,7 @@
 #!/bin/sh
 # Sorts windows alphabetically by their canonical slug (see bin/tmux-window-slug),
 # so a leading marker or trailing task suffix never changes a window's position.
+# shellcheck source=./tmux-locklib
 . "$HOME/.dotfiles/bin/tmux-locklib"
 
 lock=/tmp/tmux-sort-windows.lock

@@ -13,6 +13,7 @@ SLUG="$HOME/.dotfiles/bin/tmux-window-slug"
 # before releasing the lock, so a rename mid-run isn't silently lost. (A tiny
 # race remains between the final marker check and lock release; the next window
 # event re-syncs everything, so at worst one window shows a stale color briefly.)
+# shellcheck source=./tmux-locklib
 . "$HOME/.dotfiles/bin/tmux-locklib"
 
 lock=/tmp/tmux-color-windows.lock
@@ -21,6 +22,7 @@ if ! lock_acquire "$lock"; then
   : > "$pending"
   exit 0
 fi
+# shellcheck disable=SC2329,SC2317 # invoked via the trap below on the early-exit path at line 28, before redefinition (code differs by shellcheck version)
 release() { rm -rf "$lock"; }
 trap release EXIT
 trap 'release; exit 130' INT TERM HUP

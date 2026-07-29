@@ -29,6 +29,7 @@
 # sort reselects the original window and triggers one clean render when it is done.
 # Check the lock's owner is alive (not just that the dir exists) so a sort killed
 # mid-run can't leave a stale lock that suppresses freshness forever.
+# shellcheck source=./tmux-locklib
 . "$HOME/.dotfiles/bin/tmux-locklib"
 lock_live /tmp/tmux-sort-windows.lock && exit 0
 
