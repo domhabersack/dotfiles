@@ -155,13 +155,13 @@ already renders for its own per-turn display.
 Similarly, `<prefix> T` opens a popup (`bin/tmux-obsidian-task-list`) listing
 every open task across your Obsidian daily notes, grouped by project tag and
 sorted oldest-first; and each window-list entry in `<prefix> w` shows a bold
-name plus a `done/total` count while tasks tagged `#<window-name>` are open
+name plus a `done/total` count while tasks tagged `#<window-slug>` are open
 in any daily note (`bin/tmux-obsidian-tasks`, kept live by
 `bin/tmux-obsidian-watch`, an `fswatch` daemon — `brew install fswatch`, or
 this degrades to updating only on window create/rename). Both features
 require `TMUX_OBSIDIAN_DAILY_DIR` (set in `~/.zshrc.local`) to point at a
-directory of daily notes — one `.md` file per day, each with a `## Tasks`
-section of `- [ ]`/`- [x]` lines — and are fully disabled, with no popup
+directory of daily notes — one `.md` file per day with `- [ ]`/`- [x]` lines,
+with the popup restricted to a `## Tasks` heading — and are fully disabled, with no popup
 binding and no window annotations, when it's unset. Per-project popup header
 colors reuse `~/.dotfiles/window-colors`, the same file `bin/tmux-color-windows`
 reads, so the two views can never disagree on a project's color. Note that
