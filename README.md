@@ -99,7 +99,7 @@ refire on nearly every turn of an active conversation, far faster than the
 window-selection event that clears the emoji, so flagging the foreground
 window would just show a stuck-looking indicator rather than a useful one.
 
-Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf.local`) can show
+Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf`) can show
 your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each
 session row via `bin/tmux-usage-statusline`. That script only reads
 `~/.claude/.usage-cache.json` — nothing writes it by default. Add a `statusLine`
@@ -151,6 +151,24 @@ appends an age marker once it's gone stale for more than 15 minutes, and
 prints `Claude quota: n/a` if the cache file doesn't exist yet. This snippet
 only handles the caching — fold it into whatever your `statusLine` command
 already renders for its own per-turn display.
+
+Similarly, `<prefix> T` opens a popup (`bin/tmux-obsidian-task-list`) listing
+every open task across your Obsidian daily notes, grouped by project tag and
+sorted oldest-first; and each window-list entry in `<prefix> w` shows a bold
+name plus a `done/total` count while tasks tagged `#<window-slug>` are open
+in any daily note (`bin/tmux-obsidian-tasks`, kept live by
+`bin/tmux-obsidian-watch`, an `fswatch` daemon — `brew install fswatch`, or
+this degrades to updating only on window create/rename). Both features
+require `TMUX_OBSIDIAN_DAILY_DIR` (set in `~/.zshrc.local`) to point at a
+directory of daily notes — one `.md` file per day with `- [ ]`/`- [x]` lines,
+with the popup restricted to a `## Tasks` heading — and are fully disabled, with no popup
+binding and no window annotations, when it's unset. Per-project popup header
+colors reuse `~/.dotfiles/window-colors`, the same file `bin/tmux-color-windows`
+reads, so the two views can never disagree on a project's color. Note that
+tmux only picks up newly-exported environment variables when its server
+(re)starts — after first setting `TMUX_OBSIDIAN_DAILY_DIR`, a plain
+`<prefix> r` config reload isn't enough; kill and restart the tmux server (or
+just reboot/relogin).
 
 Each window-list entry also starts with a four-cell **freshness bar** showing how
 recently that window was accessed, filling right-to-left from `░░░░` (not touched

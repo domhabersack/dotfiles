@@ -1,0 +1,94 @@
+#!/bin/sh
+# Sets @tmux_tasks on each window based on matching tasks in the daily notes
+# under TMUX_OBSIDIAN_DAILY_DIR. The window-status-format reads this option
+# to display task progress without embedding anything in the window name
+# itself.
+#
+# Format expected in daily notes (hashtag anywhere in the line, case-sensitive):
+#   - [ ] some task description #szde-themr-api   ← unchecked
+#   - [x] some task description #szde-themr-api   ← checked
+#
+# @tmux_tasks values:
+#   "2/5"    — two open tasks out of five total
+#   ""        — all tasks completed, or no references to this slug in any active daily note
+#
+# TMUX_OBSIDIAN_DAILY_DIR must point at the daily notes directory (only its
+# top level is scanned; e.g. an Archive/ subdirectory is not). Unset/empty
+# means the feature is disabled: exit immediately without touching any
+# window option.
+
+[ -n "$TMUX_OBSIDIAN_DAILY_DIR" ] || exit 0
+DAILY_DIR="$TMUX_OBSIDIAN_DAILY_DIR"
+SLUG="$HOME/.dotfiles/bin/tmux-window-slug"
+
+# Re-entrancy handling, mirroring tmux-color-windows. The lock dir keeps a
+# single run touching windows at a time. If an event fires while a run is in
+# progress, it drops a "pending" marker and exits; the active run notices the
+# marker and re-applies once more before releasing the lock, so a
+# create/rename mid-run isn't silently lost. (A tiny race remains between the
+# final marker check and lock release; the next window event re-syncs
+# everything, so at worst one window shows a stale count briefly.)
+# shellcheck source=./tmux-locklib
+. "$HOME/.dotfiles/bin/tmux-locklib"
+
+lock=/tmp/tmux-obsidian-tasks.lock
+pending=/tmp/tmux-obsidian-tasks.pending
+if ! lock_acquire "$lock"; then
+  : > "$pending"
+  exit 0
+fi
+# shellcheck disable=SC2329,SC2317 # invoked via the trap below on the early-exit path, before redefinition (code differs by shellcheck version)
+release() { rm -rf "$lock"; }
+trap release EXIT
+trap 'release; exit 130' INT TERM HUP
+
+[ -d "$DAILY_DIR" ] || exit 0
+
+release() { rm -f "$pending"; rm -rf "$lock"; }
+
+apply() {
+  tmux list-windows -a -F '#{window_id} #{window_name}' | \
+  while read -r wid name; do
+    # Matching is done on the canonical window slug (see bin/tmux-window-slug),
+    # so a leading marker or trailing task-indicator suffix never breaks lookup.
+    slug=$(printf '%s' "$name" | "$SLUG")
+
+    # Escape ERE metacharacters in the slug so grep -E treats it literally.
+    escaped=$(printf '%s' "$slug" | sed 's/\([\\^$.|()?*+{}\[\]]\)/\\\1/g')
+
+    if grep -qE "^[[:space:]]*-[[:space:]]*\[[x ]\][[:space:]].*#${escaped}([^[:alnum:]_-]|$)" \
+         "$DAILY_DIR"/*.md 2>/dev/null
+    then
+      # grep -c prints one count per file, not a total across files, so this
+      # needs grep -h | wc -l instead — shellcheck's -c suggestion doesn't apply.
+      # shellcheck disable=SC2126
+      open=$(grep -hE "^[[:space:]]*-[[:space:]]*\[ \][[:space:]].*#${escaped}([^[:alnum:]_-]|$)" \
+               "$DAILY_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')
+      # shellcheck disable=SC2126
+      done_=$(grep -hE "^[[:space:]]*-[[:space:]]*\[x\][[:space:]].*#${escaped}([^[:alnum:]_-]|$)" \
+                "$DAILY_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')
+      total=$((open + done_))
+
+      if [ "$open" -gt 0 ]; then
+        indicator="${done_}#[fg=colour8]/${total}"
+        open_flag="1"
+      else
+        indicator=""
+        open_flag=""
+      fi
+    else
+      indicator=""
+      open_flag=""
+    fi
+
+    tmux set-window-option -t "$wid" @tmux_tasks "$indicator"
+    tmux set-window-option -t "$wid" @tmux_open_tasks "$open_flag"
+  done
+}
+
+rm -f "$pending"
+apply
+while [ -e "$pending" ]; do
+  rm -f "$pending"
+  apply
+done

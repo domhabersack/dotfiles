@@ -1,0 +1,108 @@
+#!/bin/sh
+# Prints all open (unchecked) tasks from the "## Tasks" section of each
+# daily note under TMUX_OBSIDIAN_DAILY_DIR. Read-only reference list for the
+# tmux popup bound to `prefix + T` (see tmux.conf); that binding only exists
+# when TMUX_OBSIDIAN_DAILY_DIR is set, but this script also guards itself so
+# a direct/manual invocation degrades the same way.
+
+if [ -z "$TMUX_OBSIDIAN_DAILY_DIR" ]; then
+  echo "TMUX_OBSIDIAN_DAILY_DIR is not set"
+  exit 0
+fi
+DAILY_DIR="$TMUX_OBSIDIAN_DAILY_DIR"
+
+if [ ! -d "$DAILY_DIR" ]; then
+  echo "Daily notes folder not found: $DAILY_DIR"
+  exit 0
+fi
+
+tmpfile=$(mktemp /tmp/tmux-obsidian-task-list.XXXXXX)
+sortedfile=$(mktemp /tmp/tmux-obsidian-task-list.XXXXXX)
+trap 'rm -f "$tmpfile" "$sortedfile"' EXIT
+
+# Emit one record per open task as: sortkey <TAB> project <TAB> date <TAB> text
+# sortkey is the lowercased project name, or "~" for Uncategorized so it always
+# sorts after every real project name (any lowercase letter < "~" in ASCII).
+for file in "$DAILY_DIR"/*.md; do
+  [ -e "$file" ] || continue
+  date=$(basename "$file" .md)
+  date=${date%% *}
+  awk -v date="$date" '
+    BEGIN { intask = 0 }
+    /^## Tasks[ \t]*$/ { intask = 1; next }
+    /^## / { intask = 0; next }
+    !intask { next }
+    /^[ \t]*-[ \t]*\[x\][ \t]/ { next }
+    /^[ \t]*-[ \t]*\[ \][ \t]/ {
+      line = $0
+      sub(/^[ \t]*-[ \t]*\[ \][ \t]*/, "", line)
+      if (match(line, /(^|[ \t])#[A-Za-z0-9._\/-]+/)) {
+        tagtext = substr(line, RSTART, RLENGTH)
+        gsub(/^[ \t]*#/, "", tagtext)
+        project = tagtext
+        removed = line
+        sub(/(^|[ \t])#[A-Za-z0-9._\/-]+/, "", removed)
+        gsub(/^[ \t]+|[ \t]+$/, "", removed)
+        text = removed
+      } else {
+        project = "Uncategorized"
+        text = line
+        gsub(/^[ \t]+|[ \t]+$/, "", text)
+      }
+      sortkey = (project == "Uncategorized") ? "~" : tolower(project)
+      print sortkey "\t" project "\t" date "\t" text
+    }
+  ' "$file" >> "$tmpfile"
+done
+
+if [ ! -s "$tmpfile" ]; then
+  echo "No open tasks 🎉"
+  exit 0
+fi
+
+esc=$(printf '\033')
+tab=$(printf '\t')
+
+# Reuse the same per-project color mapping as the tmux window-status bar
+# (bin/tmux-color-windows): window-colors groups slugs under a [fg=colourN]
+# header; a project not listed there falls back to the default bold cyan.
+# Always the same file bin/tmux-color-windows reads (no override) so the
+# popup's colors can never drift from choose-tree's.
+colorfile="$HOME/.dotfiles/window-colors"
+[ -f "$colorfile" ] || colorfile=/dev/null
+
+sort -t "$tab" -k1,1 -k2,2 -k3,3 "$tmpfile" > "$sortedfile"
+
+awk -F'\t' -v esc="$esc" -v colorfile="$colorfile" '
+  FILENAME == colorfile {
+    line = $0
+    gsub(/^[ \t]+|[ \t]+$/, "", line)
+    if (line == "" || line ~ /^#/) next
+    if (line ~ /^\[/) {
+      spec = line
+      sub(/^\[/, "", spec)
+      sub(/\].*$/, "", spec)
+      if (match(spec, /colou?r[0-9]+/)) {
+        num = substr(spec, RSTART, RLENGTH)
+        gsub(/[^0-9]/, "", num)
+        curcolor = esc "[38;5;" num "m"
+      } else {
+        curcolor = ""
+      }
+      next
+    }
+    if (curcolor != "") colormap[line] = curcolor
+    next
+  }
+  {
+    project = $2; date = $3; text = $4
+    if (project != prevproject) {
+      if (count > 0) print ""
+      hdrcolor = (project in colormap) ? colormap[project] : esc "[1;36m"
+      printf "%s%s%s[0m\n", hdrcolor, project, esc
+      prevproject = project
+    }
+    printf "[ ] %s %s\n", date, text
+    count++
+  }
+' "$colorfile" "$sortedfile"
