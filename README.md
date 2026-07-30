@@ -213,11 +213,14 @@ anyone with read access; alerts need collaborator-level access on that
 specific repo) — so each half is fetched, cached, and rendered independently:
 a repo shows PRs only, vulnerabilities only, both, or (most commonly, for a repo this
 account isn't a collaborator on) neither, with no crash or error text either
-way. Also degrades to rendering nothing if `gh` is missing, the pane isn't
+way. Also degrades to rendering nothing if `gh` or `jq` is missing, the pane isn't
 inside a git repo, the repo has no remote, or the active window belongs to a
 detached session.
 
-Requires the `gh` CLI installed and `gh auth login` run once. Results are
+Requires the `gh` CLI installed and `gh auth login` run once, plus `jq` for
+parsing the API responses (without it both halves silently render nothing).
+Also needs tmux ≥ 3.5 for the `#{R:…}` repeat modifier the status-bar rule
+above uses. Results are
 cached per-repo under `~/.cache/tmux-repo-pr/` so the status bar never blocks
 on the network: a repo seen for the first time shows a loading indicator
 while the background fetch runs, and every render after that shows the last
@@ -242,7 +245,7 @@ On first shell/editor start, plugins install themselves automatically:
 - `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening the current billing block's usage in a floating popup.
 - `brew install git-delta` — syntax-highlighted, line-level diffs for `git diff`/`git log`/`git show`; falls back to git's plain output if not installed.
 - `brew install bat` — colorized `cat`/man-page replacement; also powers the preview pane in fzf's Ctrl-T file picker.
-- [`gh`](https://cli.github.com) + `gh auth login` — powers the per-repo open-PR count in `status-left` (see above); read-only, degrades to nothing without it.
+- [`gh`](https://cli.github.com) + `gh auth login` (and `jq`) — power the per-repo open-PR and Dependabot-vulnerability counts in `status-left` (see above); read-only, degrades to nothing without either.
 
 ## Contents
 
