@@ -134,7 +134,7 @@ EOF
 EOF
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected_header=$(printf '\033[1;36mewi-deployment\033[0m')
+  expected_header=$(printf '\033[38;5;0mewi-deployment\033[0m')
   expected_line='[ ] 2026-07-20 check if `szm-internal-deployment` should be merged into an EWI project'
   [ "$(printf '%s\n' "$output" | sed -n '1p')" = "$expected_header" ]
   [ "$(printf '%s\n' "$output" | sed -n '2p')" = "$expected_line" ]
@@ -156,7 +156,7 @@ EOF
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   matched_header=$(printf '\033[38;5;6mewi-deployment\033[0m')
-  fallback_header=$(printf '\033[1;36msome-unlisted-project\033[0m')
+  fallback_header=$(printf '\033[38;5;0msome-unlisted-project\033[0m')
   printf '%s' "$output" | grep -qF -- "$matched_header"
   printf '%s' "$output" | grep -qF -- "$fallback_header"
 }

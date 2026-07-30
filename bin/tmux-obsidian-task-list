@@ -65,7 +65,8 @@ tab=$(printf '\t')
 
 # Reuse the same per-project color mapping as the tmux window-status bar
 # (bin/tmux-color-windows): window-colors groups slugs under a [fg=colourN]
-# header; a project not listed there falls back to the default bold cyan.
+# header; a project not listed there falls back to plain black, matching
+# choose-tree's default (unbolded, no @tmux_color) window rows.
 # Always the same file bin/tmux-color-windows reads (no override) so the
 # popup's colors can never drift from choose-tree's.
 colorfile="$HOME/.dotfiles/window-colors"
@@ -98,7 +99,7 @@ awk -F'\t' -v esc="$esc" -v colorfile="$colorfile" '
     project = $2; date = $3; text = $4
     if (project != prevproject) {
       if (count > 0) print ""
-      hdrcolor = (project in colormap) ? colormap[project] : esc "[1;36m"
+      hdrcolor = (project in colormap) ? colormap[project] : esc "[38;5;0m"
       printf "%s%s%s[0m\n", hdrcolor, project, esc
       prevproject = project
     }
