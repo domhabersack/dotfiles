@@ -15,6 +15,7 @@
 # Usage: tmux-repo-pr-fetch <owner/repo>
 set -eu
 
+# shellcheck source=./tmux-locklib
 . "$HOME/.dotfiles/bin/tmux-locklib"
 
 repo=$1

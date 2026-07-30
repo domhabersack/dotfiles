@@ -76,6 +76,7 @@ while read -r attached active wid path; do
 
   line=$(jq -r '"\(.pr_status // "error") \(.pr_total // 0) \(.pr_human // 0) \(.pr_bot // 0) \(.vuln_status // "error") \(.vuln_total // 0) \(.vuln_critical // 0) \(.vuln_high // 0) \(.vuln_medium // 0) \(.vuln_low // 0) \(.vuln_unknown // 0) \(.fetched_at // 0)"' "$cache_file" 2>/dev/null) || line=''
   if [ -n "$line" ]; then
+    # shellcheck disable=SC2086  # deliberate: split jq's space-joined fields into positional params
     set -- $line
     pr_status=$1; pr_total=$2; pr_human=$3; pr_bot=$4
     vuln_status=$5; vuln_total=$6; vuln_critical=$7; vuln_high=$8; vuln_medium=$9
@@ -103,6 +104,7 @@ while read -r attached active wid path; do
       # non-zero buckets -- mirrors mission-status's severityParts.
       sevs=''
       for triple in "$vuln_critical critical fg=colour196" "$vuln_high high fg=colour208" "$vuln_medium medium fg=colour214" "$vuln_low low fg=colour130" "$vuln_unknown unknown dim"; do
+        # shellcheck disable=SC2086  # deliberate: split "count label style" into positional params
         set -- $triple
         part=$(sev_part "$1" "$2" "$3") || continue
         sevs="${sevs:+$sevs, }$part"
