@@ -7,7 +7,7 @@
 #     now). Each cell steps ░ → ▒ → ▓ → █ before the next cell to its left
 #     begins to darken, for 3*CELLS+1 stages in all, spread LOGARITHMICALLY
 #     between FRESH and STALE so freshness drops off fast at first and then
-#     ever more slowly — a window fades over ~2 weeks.
+#     ever more slowly — a window fades to empty over ~1 week.
 #
 #   - COLOR: the whole bar is always a single solid color (never a per-cell
 #     gradient), fading with the same stage used for shape above: pure black
@@ -40,7 +40,7 @@ now=$(date +%s)
 # the stages on a log scale. CELLS is purely the bar's width — color is
 # derived from the same stage, see below.
 FRESH=900         # <= this (15 min): brand-new, full bar
-STALE=2592000     # >= this (~1 month): ancient, empty bar
+STALE=604800      # >= this (1 week): ancient, empty bar
 CELLS=6           # bar width in cells; purely cosmetic
 
 # Decide each window's stored access time. The active window of every attached
