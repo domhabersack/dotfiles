@@ -244,7 +244,7 @@ On first shell/editor start, plugins install themselves automatically:
 - `brew install zoxide` — smart `cd` with frecency; auto-activated if present.
 - `brew install lazygit` — bound to `prefix g` in tmux, opening in a floating popup.
 - `brew install mosh` — drop-in `ssh` replacement that survives network drops/roaming; use `mosh user@host` in place of `ssh` on flaky connections.
-- `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening the current billing block's usage in a floating popup.
+- `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening a monthly usage report (per-model breakdown) in a floating popup.
 - `brew install git-delta` — syntax-highlighted, line-level diffs for `git diff`/`git log`/`git show`; falls back to git's plain output if not installed.
 - `brew install bat` — colorized `cat`/man-page replacement; also powers the preview pane in fzf's Ctrl-T file picker.
 - [`gh`](https://cli.github.com) + `gh auth login` (and `jq`) — power the per-repo open-PR and Dependabot-vulnerability counts in `status-left` (see above); read-only, degrades to nothing without either.
