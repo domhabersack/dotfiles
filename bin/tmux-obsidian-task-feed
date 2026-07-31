@@ -1,0 +1,61 @@
+#!/bin/sh
+# Turns bin/tmux-obsidian-task-records' extraction into fzf's input format
+# for the interactive picker (bin/tmux-obsidian-task-picker): one
+# pre-rendered display field, plus enough hidden fields for the toggle
+# (bin/tmux-obsidian-task-toggle) and fzf's cursor tracking (--id-nth) to
+# work off of.
+#
+#   display US file US lineno US text US rawline
+#
+# display  "[ ] " + colored, padded project + "  " + date + "  " + text for
+#          an open task; a done task is the whole row dimmed (ESC[2m), flat
+#          grey with no per-project color -- the point of dimming is "this
+#          is history", so highlighting it would defeat that
+# file     absolute path (passed through from records)
+# lineno   1-based line number (passed through from records; a hint only)
+# text     tag-stripped task text -- the --id-nth identity field, stable
+#          across a toggle, unlike rawline, which changes when the
+#          checkbox flips
+# rawline  byte-exact source line -- what the toggle verifies against
+#
+# Project names are padded to a constant width across the whole set (not
+# per record) so the date/text columns line up; that requires buffering
+# every record before printing any of them, which is fine at this scale
+# (tens of rows).
+#
+# TMUX_OBSIDIAN_TASK_HIDEDONE: when set to the path of an existing file,
+# done tasks are omitted entirely (bound to ctrl-h in the picker). Unset,
+# or pointing at a file that doesn't exist: all tasks show, done ones
+# dimmed. This is a presence check, not a file read -- content doesn't
+# matter, only whether the file exists.
+
+hidedone=0
+if [ -n "$TMUX_OBSIDIAN_TASK_HIDEDONE" ] && [ -f "$TMUX_OBSIDIAN_TASK_HIDEDONE" ]; then
+  hidedone=1
+fi
+
+bindir=$(dirname "$0")
+us=$(printf '\037')
+esc=$(printf '\033')
+
+"$bindir/tmux-obsidian-task-records" | awk -F "$us" -v OFS="$us" -v esc="$esc" -v hidedone="$hidedone" '
+  hidedone && $5 == "x" { next }
+  {
+    n++
+    project[n] = $2; date[n] = $3; text[n] = $4; state[n] = $5
+    colour[n] = $6; file[n] = $7; lineno[n] = $8; rawline[n] = $9
+    if (length($2) > width) width = length($2)
+  }
+  END {
+    for (i = 1; i <= n; i++) {
+      pad = project[i]
+      while (length(pad) < width) pad = pad " "
+      if (state[i] == "x") {
+        display = esc "[2m[x] " pad "  " date[i] "  " text[i] esc "[0m"
+      } else {
+        display = "[ ] " esc "[38;5;" colour[i] "m" pad esc "[0m" "  " date[i] "  " text[i]
+      }
+      print display, file[i], lineno[i], text[i], rawline[i]
+    }
+  }
+'
