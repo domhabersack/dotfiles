@@ -68,37 +68,6 @@ program emitting an actual bell character — for Claude Code, set
 `"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
 Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
-For Claude Code specifically, three notification types get their own emoji
-instead of the generic 🔔: 🔐 for a pending permission prompt or an MCP
-elicitation dialog (both are "blocked, waiting on you" states — just from
-different subsystems), 💬 for an idle prompt (task done, waiting on you). Add
-this to the `hooks` key in `~/.claude/settings.json` (merge it if the key
-already exists):
-
-```json
-"hooks": {
-  "Notification": [
-    { "matcher": "permission_prompt",   "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify approval" }] },
-    { "matcher": "idle_prompt",         "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify idle" }] },
-    { "matcher": "elicitation_dialog",  "hooks": [{ "type": "command", "command": "~/.dotfiles/bin/tmux-claude-notify approval" }] }
-  ]
-}
-```
-
-The other notification types (`auth_success`, `elicitation_complete`,
-`elicitation_response`, `agent_needs_input`, `agent_completed`) are left to
-fall back to the plain 🔔: the first three are transient acknowledgements
-with no state worth persisting on a window, and the last two describe a
-different background session rather than the pane's own window.
-
-`bin/tmux-claude-notify` falls back to tmux's well-known install paths if
-`tmux` isn't on `PATH` — worth knowing if your `~/.claude/settings.json` sets
-a custom `env.PATH` that excludes it, as this one does. It also skips
-stamping a window you're currently attached to and looking at: notifications
-refire on nearly every turn of an active conversation, far faster than the
-window-selection event that clears the emoji, so flagging the foreground
-window would just show a stuck-looking indicator rather than a useful one.
-
 Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf`) can show
 your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each
 session row via `bin/tmux-usage-statusline`. That script only reads
