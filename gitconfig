@@ -18,10 +18,10 @@
   changed = yellow
 [core]
   excludesfile = ~/.gitignore_global
-  # falls back to plain output if delta isn't installed (brew install git-delta)
-  pager = delta
+  # use delta if installed (brew install git-delta), else fall back to plain output
+  pager = if command -v delta >/dev/null 2>&1; then delta; else less; fi
 [interactive]
-  diffFilter = delta --color-only
+  diffFilter = if command -v delta >/dev/null 2>&1; then delta --color-only; else cat; fi
 [delta]
   navigate = true
 [credential]
