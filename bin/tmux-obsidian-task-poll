@@ -1,0 +1,47 @@
+#!/bin/sh
+# Bound to fzf's every(5) in bin/tmux-obsidian-task-picker: emits an fzf
+# action list, reloading the picker's feed only when the daily notes
+# actually changed since the last tick (an Obsidian edit) or since our own
+# last toggle (bin/tmux-obsidian-task-toggle refreshes the stamp itself, so
+# its own write doesn't cause a second, redundant reload here).
+#
+# The gate is load-bearing, not an optimization: extraction costs ~90ms
+# (bin/tmux-obsidian-task-records over the current ~6 notes), and with
+# fzf's --track --id-nth, a reload blocks keyboard input until the cursor's
+# identity match is found in the new stream. An ungated every(5):reload
+# would stall input for ~90ms every five seconds even when nothing
+# changed; this turns almost every tick into a cheap no-op instead.
+#
+# TMUX_OBSIDIAN_TASK_STAMP: path to a file this script owns, holding the
+# last-seen change stamp. Falls back to a fixed /tmp path so a direct,
+# manual invocation still behaves sanely; the picker sets its own
+# per-invocation file so concurrent popups never share state.
+
+stampfile="${TMUX_OBSIDIAN_TASK_STAMP:-/tmp/tmux-obsidian-task-poll.stamp}"
+
+# Never fight someone mid-keystroke in the fzf query box.
+if [ "${FZF_IDLE_TIME_MS:-9999}" -lt 400 ]; then
+  echo ignore
+  exit 0
+fi
+
+if [ -z "$TMUX_OBSIDIAN_DAILY_DIR" ] || [ ! -d "$TMUX_OBSIDIAN_DAILY_DIR" ]; then
+  echo ignore
+  exit 0
+fi
+
+# cksum, not stat: mtime is 1-second granularity and a [ ]<->[x] flip
+# leaves the file size unchanged, so a change within the same second as
+# the last tick could otherwise be missed. cksum is POSIX, one fork per
+# tick, content-exact, and its own output includes the filenames, so a
+# new or deleted note also changes the stamp.
+stamp=$(cksum "$TMUX_OBSIDIAN_DAILY_DIR"/*.md 2>/dev/null)
+prev=$(cat "$stampfile" 2>/dev/null)
+
+if [ "$stamp" = "$prev" ]; then
+  echo ignore
+  exit 0
+fi
+
+printf '%s\n' "$stamp" > "$stampfile"
+echo "reload-sync($HOME/.dotfiles/bin/tmux-obsidian-task-feed)"

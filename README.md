@@ -121,23 +121,44 @@ prints `Claude quota: n/a` if the cache file doesn't exist yet. This snippet
 only handles the caching — fold it into whatever your `statusLine` command
 already renders for its own per-turn display.
 
-Similarly, `<prefix> T` opens a popup (`bin/tmux-obsidian-task-list`) listing
-every open task across your Obsidian daily notes, grouped by project tag and
-sorted oldest-first; and each window-list entry in `<prefix> w` shows a bold
-name plus a `done/total` count while tasks tagged `#<window-slug>` are open
-in any daily note (`bin/tmux-obsidian-tasks`, kept live by
-`bin/tmux-obsidian-watch`, an `fswatch` daemon — `brew install fswatch`, or
-this degrades to updating only on window create/rename). Both features
-require `TMUX_OBSIDIAN_DAILY_DIR` (set in `~/.zshrc.local`) to point at a
-directory of daily notes — one `.md` file per day with `- [ ]`/`- [x]` lines,
-with the popup restricted to a `## Tasks` heading — and are fully disabled, with no popup
-binding and no window annotations, when it's unset. Per-project popup header
-colors reuse `~/.dotfiles/window-colors`, the same file `bin/tmux-color-windows`
-reads, so the two views can never disagree on a project's color. Note that
-tmux only picks up newly-exported environment variables when its server
-(re)starts — after first setting `TMUX_OBSIDIAN_DAILY_DIR`, a plain
-`<prefix> r` config reload isn't enough; kill and restart the tmux server (or
-just reboot/relogin).
+Similarly, `<prefix> T` opens an interactive popup
+(`bin/tmux-obsidian-task-picker`) listing every task — open and done — across
+your Obsidian daily notes, grouped by project tag: `space`/`enter` flips the
+highlighted task's checkbox in place in its note, `ctrl-h` hides/shows done
+tasks (shown by default, dimmed), `ctrl-r` forces a refresh, and `esc` closes
+the popup. A toggle writes straight to the note, so it shows up in Obsidian
+immediately; conversely, editing a note directly in Obsidian while the popup
+is open is picked up there within a few seconds, no keypress needed
+(`bin/tmux-obsidian-task-poll`, on fzf's `every(5)`). This needs `fzf`
+(see "Plugins (auto-installed)" below); without it, the popup falls back to
+the previous read-only list (`bin/tmux-obsidian-task-list`, still grouped and
+sorted oldest-first, but open tasks only, and un-toggleable). Each
+window-list entry in `<prefix> w`
+also shows a bold name plus a `done/total` count while tasks tagged
+`#<window-slug>` are open in any daily note (`bin/tmux-obsidian-tasks`, kept
+live by `bin/tmux-obsidian-watch`, an `fswatch` daemon — `brew install
+fswatch`, or this degrades to updating only on window create/rename). All of
+this requires `TMUX_OBSIDIAN_DAILY_DIR` (set in `~/.zshrc.local`) to point at
+a directory of daily notes — one `.md` file per day with `- [ ]`/`- [x]`
+lines, with the popup restricted to a `## Tasks` heading — and is fully
+disabled, with no popup binding and no window annotations, when it's unset.
+Per-project popup header colors reuse `~/.dotfiles/window-colors`, the same
+file `bin/tmux-color-windows` reads, so the two views can never disagree on a
+project's color. Note that tmux only picks up newly-exported environment
+variables when its server (re)starts — after first setting
+`TMUX_OBSIDIAN_DAILY_DIR`, a plain `<prefix> r` config reload isn't enough;
+kill and restart the tmux server (or just reboot/relogin). A subsequent
+`<prefix> r` (e.g. after a dotfiles update) is enough to pick up changes to
+the binding itself.
+
+Toggling a task writes directly to the note's file on disk; if that note is
+open and has unsaved changes in Obsidian's editor at that exact moment,
+Obsidian's own autosave can overwrite the toggle a couple of seconds later.
+This is rare in practice (it requires the note to be both open and actively
+being typed in) and bounded to that one checkbox, and the auto-refresh above
+makes a reverted toggle visible within a few seconds rather than silently
+lost — see `docs/superpowers/specs/2026-07-31-tmux-obsidian-task-popup-interactive-design.md`
+for the full reasoning.
 
 Each window-list entry also starts with a four-cell **freshness bar** showing how
 recently that window was accessed, filling right-to-left from `░░░░` (not touched

@@ -1,0 +1,98 @@
+#!/bin/sh
+# Flips a task's checkbox ("- [ ]" <-> "- [x]") in place in its daily note.
+#
+# Usage: tmux-obsidian-task-toggle [record]
+#   record   one line from bin/tmux-obsidian-task-feed's output: display,
+#            file, lineno, text, rawline, joined by ASCII US (0x1f). Falls
+#            back to $FZF_CURRENT_ITEM when no argument is given, which is
+#            how the interactive picker (bin/tmux-obsidian-task-picker)
+#            invokes it -- see that script's space/enter bindings.
+#
+# Exit codes:
+#   0  wrote the flip
+#   1  usage error, missing/unreadable file, or the write itself failed
+#   2  another toggle is in progress (bin/tmux-locklib contention, ~1s of
+#      retrying before giving up)
+#   3  the recorded line no longer matches the file on disk -- someone
+#      edited the note (most likely Obsidian) between when this record was
+#      read and now; the caller should reload and let the user retry, not
+#      treat this as corruption
+#
+# Verification is by CONTENT, not just line number: a line can insert or
+# remove lines above the task between when the picker last read the note
+# and when the toggle key is pressed. The recorded line number is used only
+# as a hint checked first -- the actual match is "does any line in the file
+# equal the recorded raw line", preferring the hinted line on a tie (e.g.
+# identical task text repeated across the file).
+#
+# The write is cp -p onto a same-directory temp file (preserves mode --
+# mktemp-style temp files default to 0600, and this is a git-tracked vault,
+# so a dropped mode bit would show up as permanent noise in every toggled
+# note's git history), overwrite that temp file's content in place, then mv
+# it over the original. Not sed -i: escaping an arbitrary markdown line into
+# a sed pattern is a quoting hazard (backticks, /, &, [, ] all appear in
+# real notes), and sed has no way to express "verify content, else bail".
+# The temp file lives in the note's own directory (not $TMPDIR) so the
+# final mv is a same-filesystem rename -- atomic, so Obsidian's file
+# watcher (and Obsidian Sync, and our own bin/tmux-obsidian-watch) only
+# ever observes the complete new content, never a truncated file.
+
+us=$(printf '\037')
+
+record="${1:-$FZF_CURRENT_ITEM}"
+[ -n "$record" ] || exit 1
+
+file=$(printf '%s' "$record" | awk -F "$us" '{print $2}')
+lineno=$(printf '%s' "$record" | awk -F "$us" '{print $3}')
+want=$(printf '%s' "$record" | cut -d "$us" -f5)
+
+[ -n "$file" ] && [ -f "$file" ] || exit 1
+case "$lineno" in
+  '' | *[!0-9]*) lineno=0 ;;
+esac
+
+# shellcheck source=./tmux-locklib
+. "$HOME/.dotfiles/bin/tmux-locklib"
+
+lockdir=/tmp/tmux-obsidian-task-toggle.lock
+tries=0
+while ! lock_acquire "$lockdir"; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 10 ] || exit 2
+  sleep 0.1
+done
+trap 'rm -rf "$lockdir"' EXIT
+
+dir=$(dirname "$file")
+tmp="$dir/.tmux-obsidian-task-toggle.$$"
+cp -p "$file" "$tmp" 2>/dev/null || { rm -f "$tmp"; exit 1; }
+
+nlcount=$(tail -c1 "$file" | wc -l | tr -d '[:space:]')
+hadnl=1
+[ "$nlcount" = "1" ] || hadnl=0
+
+awk -v ln="$lineno" -v want="$want" -v hadnl="$hadnl" '
+  function flip(l) {
+    if (!match(l, /^[ \t]*-[ \t]*\[/)) return l
+    p = RSTART + RLENGTH
+    c = substr(l, p, 1)
+    return substr(l, 1, p - 1) (c == " " ? "x" : " ") substr(l, p + 1)
+  }
+  { lines[NR] = $0; if (!hit && $0 == want) hit = NR }
+  END {
+    tgt = (ln >= 1 && ln <= NR && lines[ln] == want) ? ln : hit
+    if (!tgt) exit 3
+    for (i = 1; i <= NR; i++) {
+      out = (i == tgt) ? flip(lines[i]) : lines[i]
+      if (i < NR) { print out } else { printf "%s", out; if (hadnl) print "" }
+    }
+  }
+' "$file" > "$tmp" 2>/dev/null
+status=$?
+
+if [ "$status" -ne 0 ]; then
+  rm -f "$tmp"
+  exit 3
+fi
+
+mv "$tmp" "$file"
