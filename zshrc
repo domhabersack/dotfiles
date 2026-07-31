@@ -326,6 +326,12 @@ command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init zsh)"
 if command -v bat >/dev/null 2>&1; then
   alias cat='bat --paging=never'
   export MANPAGER="sh -c 'col -bx | bat -l man -p'"
+  # Render with the terminal's own 16 ANSI colors instead of a built-in
+  # theme. bat's default theme assumes a dark background, so its light
+  # foregrounds wash out on light terminals; "ansi" defers to the terminal's
+  # palette, staying readable whatever theme (light or dark) it uses. Read at
+  # each bat invocation, so it also covers the Ctrl-T preview and $MANPAGER.
+  export BAT_THEME="ansi"
 fi
 
 
