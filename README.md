@@ -203,9 +203,11 @@ native `#[fg=...]` style tags:
   severity, mirroring `deduplicateAlerts`) and bucketed by severity —
   critical (`colour196`, red), high (`colour208`, orange), medium
   (`colour214`, yellow), low (`colour130`, dark yellow/brown), unknown (dim) — shown
-  highest-severity-first, only non-zero buckets. Zero shows a reassuring
-  green (`colour34`) `no known vulnerabilities` rather than nothing, so you
-  can tell the check ran. A repo that has Dependabot alerts **turned off**
+  highest-severity-first, only non-zero buckets. Zero shows `no known
+  vulnerabilities` in the footer's default text color rather than nothing, so
+  you can tell the check ran — but with no emphasis, since a clean scan needs
+  no action and shouldn't compete with the things that do. A repo that has
+  Dependabot alerts **turned off**
   is a distinct case: it shows a yellow (`colour214`) `dependabot not
   enabled` warning instead of the green all-clear, since "off" is not the
   same as "scanned and clean" — the green would falsely imply the latter.

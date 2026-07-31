@@ -141,7 +141,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 1 1 0 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]1 PR#[nobold] (#[fg=colour6]1#[default] human, #[fg=colour6]0#[default] bot) · #[fg=colour34]no known vulnerabilities#[default]')
+  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]1 PR#[nobold] (#[fg=colour6]1#[default] human, #[fg=colour6]0#[default] bot) · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -152,7 +152,7 @@ write_cache() {
   write_cache example-owner/example-repo error 0 0 0 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[fg=colour34]no known vulnerabilities#[default]')
+  expected=$(printf '#[fg=colour238]example-repo#[default] · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 

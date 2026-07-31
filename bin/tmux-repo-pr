@@ -99,7 +99,9 @@ while read -r attached active wid path; do
   vuln_part=''
   if [ "$vuln_status" = ok ]; then
     if [ "$vuln_total" -eq 0 ]; then
-      vuln_part='#[fg=colour34]no known vulnerabilities#[default]'
+      # Default footer color, not a standout green: a clean scan needs no
+      # action, so it shouldn't compete for attention with the things that do.
+      vuln_part='no known vulnerabilities'
     else
       # Comma-joined severity list, highest-severity first, only including
       # non-zero buckets -- mirrors mission-status's severityParts.
