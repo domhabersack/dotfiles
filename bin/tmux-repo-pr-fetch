@@ -1,0 +1,117 @@
+#!/bin/sh
+# One-shot, read-only fetch of a repo's open-PR (human vs bot) and
+# deduplicated Dependabot vulnerability-alert (by severity) counts via `gh`,
+# run detached and lock-guarded so duplicate hooks firing for the same repo
+# can't launch concurrent `gh` calls. Mirrors ~/Developer/mission-status's
+# classification (internal/github/prs.go IsBotPR, internal/github/vulns.go
+# deduplicateAlerts) and severity color scheme (internal/render/color.go),
+# translated from raw ANSI to tmux's #[fg=...] style tags.
+#
+# PR listing and vulnerability-alert access are independent GitHub
+# permissions -- a repo can allow one and deny the other (e.g. PRs are
+# public, but alerts need collaborator access) -- so each is fetched and
+# cached with its own status; a failure in one doesn't blank the other.
+#
+# Usage: tmux-repo-pr-fetch <owner/repo>
+set -eu
+
+# shellcheck source=./tmux-locklib
+. "$HOME/.dotfiles/bin/tmux-locklib"
+
+repo=$1
+safe=$(printf '%s' "$repo" | tr '/' '_')
+cache_dir="$HOME/.cache/tmux-repo-pr"
+cache_file="$cache_dir/$safe.json"
+lock_dir="/tmp/tmux-repo-pr-fetch-$safe.lock"
+vuln_err="$cache_file.err.$$"
+
+mkdir -p "$cache_dir"
+
+# A fetch for this exact repo is already in flight -- don't duplicate the
+# network calls; whichever run holds the lock will write the cache for both.
+lock_acquire "$lock_dir" || exit 0
+trap 'rm -rf "$lock_dir"; rm -f "$vuln_err"' EXIT
+
+now=$(date +%s)
+
+# --- Open PRs, split human vs bot: a dependabot/renovate branch prefix or
+# author login counts as bot, same rule as mission-status's IsBotPR. The
+# assignment is the `if` condition (not checked via $? afterward) so a
+# non-zero exit here -- an expected case, not a bug -- doesn't trip `set -e`.
+if pr_raw=$(gh api "repos/$repo/pulls?state=open&per_page=100" --paginate 2>/dev/null); then
+  pr_json=$(printf '%s' "$pr_raw" | jq -s '
+    add // [] | {
+      total: length,
+      bot: ([.[] | select(
+        ((.head.ref // "") | test("^(dependabot|renovate)/"))
+        or (((.user.login // "") | ascii_downcase) as $l | $l == "dependabot[bot]" or $l == "renovate[bot]")
+      )] | length)
+    }
+  ')
+  pr_status=ok
+  pr_total=$(printf '%s' "$pr_json" | jq -r '.total')
+  pr_bot=$(printf '%s' "$pr_json" | jq -r '.bot')
+  pr_human=$(( pr_total - pr_bot ))
+else
+  pr_status=error
+  pr_total=0; pr_human=0; pr_bot=0
+fi
+
+# --- Open Dependabot alerts, deduplicated by package (highest severity per
+# package wins, same rule as mission-status's deduplicateAlerts), bucketed
+# by severity. A failure here is an expected, common outcome and splits into
+# two cases, distinguished by the error body:
+#   disabled -- a 403 whose message says alerts are turned off for the repo.
+#               This is YOUR repo's config and actionable (you can enable it),
+#               so it's surfaced as a distinct warning rather than silence or
+#               a misleading green "no known vulnerabilities".
+#   error    -- anything else (no collaborator access on someone else's repo,
+#               rate limit, network down). Not actionable here, so it renders
+#               nothing, same as before.
+if vuln_raw=$(gh api "repos/$repo/dependabot/alerts?state=open&per_page=100" --paginate 2>"$vuln_err"); then
+  vuln_json=$(printf '%s' "$vuln_raw" | jq -s '
+    add // [] |
+    [.[] | select(.state=="open") | {
+      key: (.dependency.package.ecosystem + "/" + .dependency.package.name),
+      sev: (((.security_advisory.severity // "unknown") | ascii_downcase) as $s |
+            if ($s | IN("critical","high","medium","low")) then $s else "unknown" end)
+    }]
+    | group_by(.key)
+    | map(max_by(.sev | {"critical":4,"high":3,"medium":2,"low":1,"unknown":0}[.]))
+    | {
+        total:    length,
+        critical: (map(select(.sev=="critical")) | length),
+        high:     (map(select(.sev=="high"))     | length),
+        medium:   (map(select(.sev=="medium"))   | length),
+        low:      (map(select(.sev=="low"))      | length),
+        unknown:  (map(select(.sev=="unknown"))  | length)
+      }
+  ')
+  vuln_status=ok
+else
+  if grep -qi 'alerts are disabled' "$vuln_err"; then
+    vuln_status=disabled
+  else
+    vuln_status=error
+  fi
+  vuln_json='{"total":0,"critical":0,"high":0,"medium":0,"low":0,"unknown":0}'
+fi
+
+tmp="$cache_file.$$"
+jq -n \
+  --arg pr_status "$pr_status" \
+  --argjson pr_total "$pr_total" \
+  --argjson pr_human "$pr_human" \
+  --argjson pr_bot "$pr_bot" \
+  --arg vuln_status "$vuln_status" \
+  --argjson vuln "$vuln_json" \
+  --argjson fetched_at "$now" \
+  '{
+    fetched_at: $fetched_at,
+    pr_status: $pr_status, pr_total: $pr_total, pr_human: $pr_human, pr_bot: $pr_bot,
+    vuln_status: $vuln_status,
+    vuln_total: $vuln.total, vuln_critical: $vuln.critical, vuln_high: $vuln.high,
+    vuln_medium: $vuln.medium, vuln_low: $vuln.low, vuln_unknown: $vuln.unknown
+  }' > "$tmp" && mv -f "$tmp" "$cache_file"
+
+~/.dotfiles/bin/tmux-repo-pr

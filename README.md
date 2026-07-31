@@ -181,6 +181,62 @@ the bars decay even when idle. The bar is decorative only — like a leading mar
 emoji, it is not part of the window name, so it never affects window sorting or
 coloring.
 
+`status-left` shows open PR and Dependabot-vulnerability counts for whichever
+repo the currently active pane is in, e.g.:
+
+```
+dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+```
+
+via `bin/tmux-repo-pr` (the renderer, triggered on window/pane switches and a
+background ticker) and `bin/tmux-repo-pr-fetch` (the only thing that touches
+the network — two read-only `gh api` calls, no mutating calls of any kind).
+Both halves mirror
+[`mission-status`](https://github.com/sueddeutsche/mission-status)'s
+classification and severity color scheme, translated from raw ANSI to tmux's
+native `#[fg=...]` style tags:
+
+- **PRs** split human vs. bot (a `dependabot/`/`renovate/` branch prefix or
+  matching bot login counts as bot), mirroring `IsBotPR`.
+- **Vulnerabilities** are open Dependabot alerts, deduplicated by package
+  (multiple CVEs on the same dependency collapse to one entry at its highest
+  severity, mirroring `deduplicateAlerts`) and bucketed by severity —
+  critical (`colour196`, red), high (`colour208`, orange), medium
+  (`colour214`, yellow), low (`colour130`, dark yellow/brown), unknown (dim) — shown
+  highest-severity-first, only non-zero buckets. Zero shows `no known
+  vulnerabilities` in the footer's default text color rather than nothing, so
+  you can tell the check ran — but with no emphasis, since a clean scan needs
+  no action and shouldn't compete with the things that do. A repo that has
+  Dependabot alerts **turned off**
+  is a distinct case: it shows a yellow (`colour214`) `dependabot not
+  enabled` warning instead of the green all-clear, since "off" is not the
+  same as "scanned and clean" — the green would falsely imply the latter.
+  (This is told apart from a plain no-access failure by the API's own
+  "alerts are disabled" 403 message; no-access repos stay silent, since
+  enabling alerts there isn't yours to do.)
+
+PR listing and vulnerability-alert access are **independent GitHub
+permissions** — a repo can allow one and deny the other (PRs are visible to
+anyone with read access; alerts need collaborator-level access on that
+specific repo) — so each half is fetched, cached, and rendered independently:
+a repo shows PRs only, vulnerabilities only, both, or (most commonly, for a repo this
+account isn't a collaborator on) neither, with no crash or error text either
+way. Also degrades to rendering nothing if `gh` or `jq` is missing, the pane isn't
+inside a git repo, the repo has no remote, or the active window belongs to a
+detached session.
+
+Requires the `gh` CLI installed and `gh auth login` run once, plus `jq` for
+parsing the API responses (without it both halves silently render nothing).
+Also needs tmux ≥ 3.5 for the `#{R:…}` repeat modifier the status-bar rule
+above uses. Results are
+cached per-repo under `~/.cache/tmux-repo-pr/` so the status bar never blocks
+on the network: a repo seen for the first time shows a loading indicator
+while the background fetch runs, and every render after that shows the last
+cached values instantly, refreshing in the background roughly every 5
+minutes (15 minutes if either half errored, so an inaccessible repo isn't
+reprobed every tick). No Claude/settings.json hook needed — this is
+independent of the quota feature above.
+
 ### Plugins (auto-installed)
 
 On first shell/editor start, plugins install themselves automatically:
@@ -197,6 +253,7 @@ On first shell/editor start, plugins install themselves automatically:
 - `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening the current billing block's usage in a floating popup.
 - `brew install git-delta` — syntax-highlighted, line-level diffs for `git diff`/`git log`/`git show`; falls back to git's plain output if not installed.
 - `brew install bat` — colorized `cat`/man-page replacement; also powers the preview pane in fzf's Ctrl-T file picker.
+- [`gh`](https://cli.github.com) + `gh auth login` (and `jq`) — power the per-repo open-PR and Dependabot-vulnerability counts in `status-left` (see above); read-only, degrades to nothing without either.
 
 ## Contents
 

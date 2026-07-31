@@ -1,0 +1,143 @@
+#!/bin/sh
+# Renders each attached session's active window's repo health into that
+# window's @repo_pr option, read by status-left:
+#   dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+#
+# Mirrors ~/Developer/mission-status's line format and severity color scheme
+# (see bin/tmux-repo-pr-fetch for the exact classification/dedup rules),
+# adapted to tmux's #[fg=...] style tags and abbreviated for status-left's
+# width. Open-PR count and open-vulnerability count are independent GitHub
+# permissions and rendered independently: a repo can show one, both, or
+# (most commonly, for a repo this account isn't a collaborator on) neither.
+#
+# Resolution (git remote parsing) and cache reads here are local/fast; the
+# only network calls (via `gh`, read-only) happen in the detached,
+# lock-guarded bin/tmux-repo-pr-fetch, so this script -- and therefore the
+# status bar redraw that depends on it -- never blocks on the network.
+#
+# Cache: ~/.cache/tmux-repo-pr/<owner>_<repo>.json, one file per repo. A
+# missing cache renders a loading indicator and kicks off a fetch; a
+# present-but-stale cache renders its last value immediately AND kicks off a
+# refetch in the background -- no flicker back to "loading" on every redraw
+# tick. If either half errored (not accessible, rate-limited, network down),
+# that half renders nothing and backs off longer before retrying.
+set -eu
+
+CACHE_DIR="$HOME/.cache/tmux-repo-pr"
+OK_TTL=300      # seconds; re-check a fully-ok'd repo at most this often
+ERROR_TTL=900   # seconds; back off longer if either half errored
+
+command -v gh >/dev/null 2>&1 || {
+  tmux list-windows -a -F '#{window_id}' | while read -r wid; do
+    tmux set-window-option -t "$wid" @repo_pr ''
+  done
+  exit 0
+}
+
+# owner/repo for the git repo at $1, or nothing (nonzero exit) if $1 isn't
+# inside a git repo, has no "origin" remote, or the remote doesn't parse into
+# a clean owner/repo (e.g. deeper-nested GitLab subgroups) -- gh itself will
+# reject a bad slug, so this doesn't need to prove the remote is GitHub.
+resolve_repo() {
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  url=$(git -C "$1" remote get-url origin 2>/dev/null) || return 1
+  [ -n "$url" ] || return 1
+  repo=$(printf '%s' "$url" \
+    | sed -E 's#^[a-zA-Z]+://##; s#^[^@]*@##; s#^[^:/]+[:/]##; s#\.git$##')
+  case "$repo" in
+    */*) printf '%s\n' "$repo" ;;
+    *)   return 1 ;;
+  esac
+}
+
+# One colored "N label" segment, or nothing if count is 0. $1=count $2=label
+# $3=tmux style (e.g. "fg=colour1" or "dim").
+sev_part() {
+  [ "$1" -gt 0 ] || return 1
+  printf '#[%s]%s %s#[default]' "$3" "$1" "$2"
+}
+
+now=$(date +%s)
+
+tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{pane_current_path}' |
+while read -r attached active wid path; do
+  [ "$attached" -gt 0 ] || continue
+  [ "$active" = "1" ] || continue
+
+  repo=$(resolve_repo "$path") || { tmux set-window-option -t "$wid" @repo_pr ''; continue; }
+  safe=$(printf '%s' "$repo" | tr '/' '_')
+  cache_file="$CACHE_DIR/$safe.json"
+  short=${repo##*/}
+
+  if [ ! -f "$cache_file" ]; then
+    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour238]$short #[fg=colour4]…#[default]"
+    nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
+    continue
+  fi
+
+  line=$(jq -r '"\(.pr_status // "error") \(.pr_total // 0) \(.pr_human // 0) \(.pr_bot // 0) \(.vuln_status // "error") \(.vuln_total // 0) \(.vuln_critical // 0) \(.vuln_high // 0) \(.vuln_medium // 0) \(.vuln_low // 0) \(.vuln_unknown // 0) \(.fetched_at // 0)"' "$cache_file" 2>/dev/null) || line=''
+  if [ -n "$line" ]; then
+    # shellcheck disable=SC2086  # deliberate: split jq's space-joined fields into positional params
+    set -- $line
+    pr_status=$1; pr_total=$2; pr_human=$3; pr_bot=$4
+    vuln_status=$5; vuln_total=$6; vuln_critical=$7; vuln_high=$8; vuln_medium=$9
+    shift 9
+    vuln_low=$1; vuln_unknown=$2; fetched_at=$3
+  else
+    pr_status=error; pr_total=0; pr_human=0; pr_bot=0
+    vuln_status=error; vuln_total=0; vuln_critical=0; vuln_high=0; vuln_medium=0
+    vuln_low=0; vuln_unknown=0; fetched_at=0
+  fi
+
+  pr_part=''
+  if [ "$pr_status" = ok ]; then
+    label=PRs
+    [ "$pr_total" -eq 1 ] && label=PR
+    pr_part="#[bold]$pr_total $label#[nobold] (#[fg=colour6]$pr_human#[default] human, #[fg=colour6]$pr_bot#[default] bot)"
+  fi
+
+  vuln_part=''
+  if [ "$vuln_status" = ok ]; then
+    if [ "$vuln_total" -eq 0 ]; then
+      # Default footer color, not a standout green: a clean scan needs no
+      # action, so it shouldn't compete for attention with the things that do.
+      vuln_part='no known vulnerabilities'
+    else
+      # Comma-joined severity list, highest-severity first, only including
+      # non-zero buckets -- mirrors mission-status's severityParts.
+      sevs=''
+      for triple in "$vuln_critical critical fg=colour196" "$vuln_high high fg=colour208" "$vuln_medium medium fg=colour214" "$vuln_low low fg=colour130" "$vuln_unknown unknown dim"; do
+        # shellcheck disable=SC2086  # deliberate: split "count label style" into positional params
+        set -- $triple
+        part=$(sev_part "$1" "$2" "$3") || continue
+        sevs="${sevs:+$sevs, }$part"
+      done
+      vuln_label=vulnerabilities
+      [ "$vuln_total" -eq 1 ] && vuln_label=vulnerability
+      vuln_part="#[bold]$vuln_total $vuln_label#[nobold] ($sevs)"
+    fi
+  elif [ "$vuln_status" = disabled ]; then
+    # Dependabot is off for this repo: warn (yellow) rather than show the
+    # green "no known vulnerabilities", which would falsely imply it was
+    # scanned and came back clean.
+    vuln_part='#[fg=colour214]dependabot not enabled#[default]'
+  fi
+
+  data="${pr_part}${pr_part:+${vuln_part:+ · }}${vuln_part}"
+  if [ -n "$data" ]; then
+    rendered="#[fg=colour238]$short#[default] · $data"
+  else
+    rendered=''
+  fi
+  tmux set-window-option -t "$wid" @repo_pr "$rendered"
+
+  age=$(( now - fetched_at ))
+  if [ "$pr_status" = ok ] && [ "$vuln_status" = ok ]; then ttl=$OK_TTL; else ttl=$ERROR_TTL; fi
+  if [ "$age" -gt "$ttl" ]; then
+    nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
+  fi
+done
+
+# Repaint the status line so a freshly-set @repo_pr shows immediately, not
+# just on the next status-interval tick.
+tmux refresh-client -S 2>/dev/null
