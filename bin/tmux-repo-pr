@@ -100,7 +100,17 @@ while read -r attached active wid path; do
     else
       label=PRs
       [ "$pr_total" -eq 1 ] && label=PR
-      pr_part="#[bold]$pr_total $label#[nobold] (#[fg=colour6]$pr_human#[default] human, #[fg=colour6]$pr_bot#[default] bot)"
+      # Only color the split when there's actually a split to see. An all-human
+      # or all-bot set collapses to a plain "(all human)"/"(all bot)" -- the
+      # colored numbers earn their attention only when both sides are non-zero.
+      if [ "$pr_bot" -eq 0 ]; then
+        split='(all human)'
+      elif [ "$pr_human" -eq 0 ]; then
+        split='(all bot)'
+      else
+        split="(#[fg=colour6]$pr_human#[default] human, #[fg=colour6]$pr_bot#[default] bot)"
+      fi
+      pr_part="#[bold]$pr_total $label#[nobold] $split"
     fi
   fi
 

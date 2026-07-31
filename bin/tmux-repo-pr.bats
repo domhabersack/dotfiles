@@ -134,14 +134,36 @@ write_cache() {
   [ "$(captured_for '@1')" = "$(printf '#[fg=colour238]example-repo #[fg=colour4]…#[default]')" ]
 }
 
-@test "renders PR count with human/bot split alongside a clean vulnerability scan" {
+@test "renders colored human/bot split only when both sides are non-zero" {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  git init -q "$BATS_TEST_TMPDIR/repo"
+  git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
+  write_cache example-owner/example-repo ok 3 2 1 ok 0 0 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]3 PRs#[nobold] (#[fg=colour6]2#[default] human, #[fg=colour6]1#[default] bot) · no known vulnerabilities')
+  [ "$(captured_for '@1')" = "$expected" ]
+}
+
+@test "collapses an all-human PR set to a plain '(all human)' with no coloring" {
   add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
   git init -q "$BATS_TEST_TMPDIR/repo"
   git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
   write_cache example-owner/example-repo ok 1 1 0 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]1 PR#[nobold] (#[fg=colour6]1#[default] human, #[fg=colour6]0#[default] bot) · no known vulnerabilities')
+  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]1 PR#[nobold] (all human) · no known vulnerabilities')
+  [ "$(captured_for '@1')" = "$expected" ]
+}
+
+@test "collapses an all-bot PR set to a plain '(all bot)' with no coloring" {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  git init -q "$BATS_TEST_TMPDIR/repo"
+  git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
+  write_cache example-owner/example-repo ok 2 0 2 ok 0 0 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]2 PRs#[nobold] (all bot) · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
