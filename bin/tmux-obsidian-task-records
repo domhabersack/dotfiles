@@ -1,0 +1,117 @@
+#!/bin/sh
+# Extracts every task (open and done) under the "## Tasks" section of each
+# daily note under TMUX_OBSIDIAN_DAILY_DIR, with enough provenance (file,
+# line number, raw text) that a caller can write a checkbox flip back to
+# disk. Pure extraction: no rendering, no user-facing messages. Both
+# bin/tmux-obsidian-task-list (the read-only popup) and bin/tmux-obsidian-
+# task-feed (the interactive popup) build on this.
+#
+# One record per task, printed to stdout, fields separated by ASCII US
+# (0x1f) rather than TAB -- a tab-indented sub-task's raw line legitimately
+# contains tabs, so TAB can't safely delimit the record itself:
+#
+#   sortkey US project US date US text US state US colour US file US lineno US rawline
+#
+# sortkey  lowercased project, or "~" for Uncategorized (sorts last)
+# project  display name of the #tag, or "Uncategorized"
+# date     YYYY-MM-DD from the note's filename
+# text     task text with the tag stripped and trimmed
+# state    " " (open) or "x" (done)
+# colour   256-colour number from window-colors, "0" when the project isn't listed
+# file     absolute path to the note
+# lineno   1-based line number of the task within that note
+# rawline  the original line, byte-for-byte (last field, so embedded tabs
+#          need no escaping)
+#
+# Silently exits 0 (no output, no message) when TMUX_OBSIDIAN_DAILY_DIR is
+# unset, the folder is missing, or there are no daily notes -- this is a
+# building block, not a user-facing script; callers own their own guard
+# messages.
+
+if [ -z "$TMUX_OBSIDIAN_DAILY_DIR" ]; then
+  exit 0
+fi
+DAILY_DIR="$TMUX_OBSIDIAN_DAILY_DIR"
+
+if [ ! -d "$DAILY_DIR" ]; then
+  exit 0
+fi
+
+# Collect the top-level notes via "$@" (not a plain string) so filenames
+# containing spaces -- every daily note, by naming convention -- survive
+# intact; an unmatched glob is left literal by POSIX sh, so [ -e ] guards
+# against passing that literal pattern through as a bogus filename.
+set --
+for f in "$DAILY_DIR"/*.md; do
+  [ -e "$f" ] || continue
+  set -- "$@" "$f"
+done
+[ "$#" -gt 0 ] || exit 0
+
+# Reuse the same per-project color mapping as the tmux window-status bar
+# (bin/tmux-color-windows): window-colors groups slugs under a [fg=colourN]
+# header. A project not listed there gets colour "0" (plain black), matching
+# choose-tree's default (unbolded, no @tmux_color) window rows. Always the
+# same file bin/tmux-color-windows reads (no override) so downstream
+# renderers can never drift from choose-tree's colors.
+colorfile="$HOME/.dotfiles/window-colors"
+[ -f "$colorfile" ] || colorfile=/dev/null
+
+us=$(printf '\037')
+
+awk -v us="$us" -v colorfile="$colorfile" '
+  FILENAME == colorfile {
+    line = $0
+    gsub(/^[ \t]+|[ \t]+$/, "", line)
+    if (line == "" || line ~ /^#/) next
+    if (line ~ /^\[/) {
+      spec = line
+      sub(/^\[/, "", spec)
+      sub(/\].*$/, "", spec)
+      if (match(spec, /colou?r[0-9]+/)) {
+        num = substr(spec, RSTART, RLENGTH)
+        gsub(/[^0-9]/, "", num)
+        curcolour = num
+      } else {
+        curcolour = ""
+      }
+      next
+    }
+    if (curcolour != "") colormap[line] = curcolour
+    next
+  }
+  FNR == 1 {
+    intask = 0
+    notedate = FILENAME
+    sub(/^.*\//, "", notedate)
+    sub(/\.md$/, "", notedate)
+    sub(/ .*$/, "", notedate)
+  }
+  /^## Tasks[ \t]*$/ { intask = 1; next }
+  /^## / { intask = 0; next }
+  !intask { next }
+  /^[ \t]*-[ \t]*\[x\][ \t]/ { emit("x"); next }
+  /^[ \t]*-[ \t]*\[ \][ \t]/ { emit(" "); next }
+  function emit(state) {
+    rawline = $0
+    line = $0
+    sub(/^[ \t]*-[ \t]*\[[x ]\][ \t]*/, "", line)
+    if (match(line, /(^|[ \t])#[A-Za-z0-9._\/-]+/)) {
+      tagtext = substr(line, RSTART, RLENGTH)
+      gsub(/^[ \t]*#/, "", tagtext)
+      project = tagtext
+      removed = line
+      sub(/(^|[ \t])#[A-Za-z0-9._\/-]+/, "", removed)
+      gsub(/^[ \t]+|[ \t]+$/, "", removed)
+      text = removed
+    } else {
+      project = "Uncategorized"
+      text = line
+      gsub(/^[ \t]+|[ \t]+$/, "", text)
+    }
+    sortkey = (project == "Uncategorized") ? "~" : tolower(project)
+    colour = (project in colormap) ? colormap[project] : "0"
+    printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n", \
+      sortkey, us, project, us, notedate, us, text, us, state, us, colour, us, FILENAME, us, FNR, us, rawline
+  }
+' "$colorfile" "$@" | sort -t "$us" -k1,1 -k2,2 -k5,5 -k3,3 -k8,8n
