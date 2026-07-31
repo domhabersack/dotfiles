@@ -1,0 +1,73 @@
+#!/bin/sh
+# Interactive tmux popup bound to `prefix + T` (see tmux.conf): an fzf list
+# of every task (open and done) across the daily notes under
+# TMUX_OBSIDIAN_DAILY_DIR, backed by bin/tmux-obsidian-task-feed, with
+# space/enter flipping a task's checkbox in place via bin/tmux-obsidian-
+# task-toggle. Falls back to the read-only bin/tmux-obsidian-task-list
+# (piped through less) when fzf isn't available, so the popup degrades
+# instead of breaking -- this check happens here, at runtime inside the
+# popup's own (non-interactive, non-login) shell, rather than in tmux.conf,
+# because that shell's PATH is not the interactive PATH fzf normally lives
+# on (see bin/tmux-ccusage-popup for the same issue with node/nvm).
+#
+# Keys: space/enter toggle the highlighted task; ctrl-h hides/shows done
+# tasks; ctrl-r forces a refresh; esc closes the popup.
+#
+# Refresh: bin/tmux-obsidian-task-poll runs every 5 seconds (fzf's
+# every(5)) and reloads the list only if a daily note actually changed,
+# so an edit made directly in Obsidian shows up here on its own within a
+# few seconds -- see that script for why the gate matters.
+
+if [ -z "$TMUX_OBSIDIAN_DAILY_DIR" ]; then
+  echo "TMUX_OBSIDIAN_DAILY_DIR is not set"
+  exit 0
+fi
+
+bindir=$(dirname "$0")
+
+fzf=""
+if command -v fzf >/dev/null 2>&1; then
+  fzf=$(command -v fzf)
+elif [ -x "$HOME/.fzf/bin/fzf" ]; then
+  fzf="$HOME/.fzf/bin/fzf"
+fi
+
+if [ -z "$fzf" ]; then
+  "$bindir/tmux-obsidian-task-list" | less -R
+  exit 0
+fi
+
+# Per-invocation state, so two popups open at once (two panes) never share
+# a stamp or a hide-done flag. Cleaned up on exit -- the trap must run
+# after fzf exits, so this script must not exec fzf.
+stampfile=$(mktemp "${TMPDIR:-/tmp}/tmux-obsidian-task-poll.XXXXXX")
+hidedonefile="${TMPDIR:-/tmp}/tmux-obsidian-task-hidedone.$$"
+trap 'rm -f "$stampfile" "$hidedonefile"' EXIT
+
+export TMUX_OBSIDIAN_TASK_STAMP="$stampfile"
+export TMUX_OBSIDIAN_TASK_HIDEDONE="$hidedonefile"
+
+feed="$bindir/tmux-obsidian-task-feed"
+toggle="$bindir/tmux-obsidian-task-toggle"
+poll="$bindir/tmux-obsidian-task-poll"
+
+us=$(printf '\037')
+
+# The toggle's own reload always runs (successful flip or refused-as-stale
+# alike) so the list reflects the current file either way; a refusal also
+# rings the bell so the "nothing happened" case isn't silent.
+toggle_action="if $toggle; then echo 'reload-sync($feed)'; else echo 'bell+reload-sync($feed)'; fi"
+hidedone_action="if [ -f $hidedonefile ]; then rm -f $hidedonefile; else : > $hidedonefile; fi; echo 'reload-sync($feed)'"
+
+"$feed" | "$fzf" \
+  --ansi --delimiter="$us" --with-nth=1 --no-sort \
+  --track --id-nth=2,4 \
+  --layout=reverse --header-first --highlight-line --cycle \
+  --prompt='task> ' --info=inline-right \
+  --header='space/enter toggle · ctrl-h hide done · ctrl-r refresh · esc close' \
+  --bind="space:transform:$toggle_action" \
+  --bind="enter:transform:$toggle_action" \
+  --bind="ctrl-h:transform:$hidedone_action" \
+  --bind="ctrl-r:reload-sync($feed)" \
+  --bind="every(5):bg-transform:$poll" \
+  --bind='esc:abort'

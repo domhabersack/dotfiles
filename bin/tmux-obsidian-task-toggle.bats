@@ -92,6 +92,9 @@ rec() {
   chmod 644 "$note"
   run "$SCRIPT" "$(rec "$note" 2 '- [ ] request new computer #dotfiles')"
   [ "$status" -eq 0 ]
+  # ls -l over find -printf: the latter's %M isn't portable to BSD find
+  # (macOS, used for local dev), and this is just an assertion string.
+  # shellcheck disable=SC2012
   mode=$(ls -l "$note" | cut -c1-10)
   [ "$mode" = "-rw-r--r--" ]
 }
