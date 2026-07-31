@@ -187,7 +187,11 @@ classification and severity color scheme, translated from raw ANSI to tmux's
 native `#[fg=...]` style tags:
 
 - **PRs** split human vs. bot (a `dependabot/`/`renovate/` branch prefix or
-  matching bot login counts as bot), mirroring `IsBotPR`.
+  matching bot login counts as bot), mirroring `IsBotPR`. The two counts are
+  colored (`colour6`, cyan) only when the split is real — both sides non-zero.
+  An all-human or all-bot set collapses to a plain, uncolored `(all human)` or
+  `(all bot)`, since colored numbers earn their attention only when there's
+  actually a split to read.
 - **Vulnerabilities** are open Dependabot alerts, deduplicated by package
   (multiple CVEs on the same dependency collapse to one entry at its highest
   severity, mirroring `deduplicateAlerts`) and bucketed by severity —
