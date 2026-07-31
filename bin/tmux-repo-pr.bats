@@ -145,6 +145,17 @@ write_cache() {
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
+@test "renders a plain 'no PRs' segment without the human/bot split when there are no open PRs" {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  git init -q "$BATS_TEST_TMPDIR/repo"
+  git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
+  write_cache example-owner/example-repo ok 0 0 0 ok 0 0 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  expected=$(printf '#[fg=colour238]example-repo#[default] · no PRs · no known vulnerabilities')
+  [ "$(captured_for '@1')" = "$expected" ]
+}
+
 @test "omits the PR segment when the PR half errored, keeping the vulnerability segment" {
   add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
   git init -q "$BATS_TEST_TMPDIR/repo"
