@@ -23,13 +23,14 @@ safe=$(printf '%s' "$repo" | tr '/' '_')
 cache_dir="$HOME/.cache/tmux-repo-pr"
 cache_file="$cache_dir/$safe.json"
 lock_dir="/tmp/tmux-repo-pr-fetch-$safe.lock"
+vuln_err="$cache_file.err.$$"
 
 mkdir -p "$cache_dir"
 
 # A fetch for this exact repo is already in flight -- don't duplicate the
 # network calls; whichever run holds the lock will write the cache for both.
 lock_acquire "$lock_dir" || exit 0
-trap 'rm -rf "$lock_dir"' EXIT
+trap 'rm -rf "$lock_dir"; rm -f "$vuln_err"' EXIT
 
 now=$(date +%s)
 
@@ -58,10 +59,16 @@ fi
 
 # --- Open Dependabot alerts, deduplicated by package (highest severity per
 # package wins, same rule as mission-status's deduplicateAlerts), bucketed
-# by severity. 403/404 (alerts disabled, or this account lacks the
-# collaborator-level access alerts require) is an expected, common outcome
-# -- most repos this account isn't a collaborator on will hit this path.
-if vuln_raw=$(gh api "repos/$repo/dependabot/alerts?state=open&per_page=100" --paginate 2>/dev/null); then
+# by severity. A failure here is an expected, common outcome and splits into
+# two cases, distinguished by the error body:
+#   disabled -- a 403 whose message says alerts are turned off for the repo.
+#               This is YOUR repo's config and actionable (you can enable it),
+#               so it's surfaced as a distinct warning rather than silence or
+#               a misleading green "no known vulnerabilities".
+#   error    -- anything else (no collaborator access on someone else's repo,
+#               rate limit, network down). Not actionable here, so it renders
+#               nothing, same as before.
+if vuln_raw=$(gh api "repos/$repo/dependabot/alerts?state=open&per_page=100" --paginate 2>"$vuln_err"); then
   vuln_json=$(printf '%s' "$vuln_raw" | jq -s '
     add // [] |
     [.[] | select(.state=="open") | {
@@ -82,7 +89,11 @@ if vuln_raw=$(gh api "repos/$repo/dependabot/alerts?state=open&per_page=100" --p
   ')
   vuln_status=ok
 else
-  vuln_status=error
+  if grep -qi 'alerts are disabled' "$vuln_err"; then
+    vuln_status=disabled
+  else
+    vuln_status=error
+  fi
   vuln_json='{"total":0,"critical":0,"high":0,"medium":0,"low":0,"unknown":0}'
 fi
 

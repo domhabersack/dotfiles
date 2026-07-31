@@ -32,6 +32,10 @@ case "$path" in
     cat "$MOCK_DIR/pulls_response"
     ;;
   *dependabot/alerts*)
+    if [ -f "$MOCK_DIR/alerts_disabled" ]; then
+      echo "gh: Dependabot alerts are disabled for this repository. (HTTP 403)" >&2
+      exit 1
+    fi
     [ -f "$MOCK_DIR/alerts_fail" ] && exit 1
     cat "$MOCK_DIR/alerts_response"
     ;;
@@ -122,6 +126,21 @@ EOF
   [ "$(cache_field vuln_medium)" = "0" ]
   [ "$(cache_field vuln_low)" = "0" ]
   [ "$(cache_field vuln_unknown)" = "0" ]
+}
+
+@test "marks vuln_status as disabled (not error) when the API says alerts are turned off" {
+  : > "$MOCK_DIR/alerts_disabled"
+  run "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  [ "$(cache_field vuln_status)" = "disabled" ]
+  [ "$(cache_field vuln_total)" = "0" ]
+}
+
+@test "leaves no stray stderr-capture file behind after a fetch" {
+  run "$SCRIPT" "$REPO"
+  [ "$status" -eq 0 ]
+  run find "$HOME/.cache/tmux-repo-pr" -name '*.err.*'
+  [ -z "$output" ]
 }
 
 @test "a PR fetch failure doesn't blank the vulnerability half, and vice versa" {

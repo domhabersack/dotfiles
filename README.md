@@ -205,7 +205,13 @@ native `#[fg=...]` style tags:
   (`colour214`, yellow), low (`colour130`, dark yellow/brown), unknown (dim) — shown
   highest-severity-first, only non-zero buckets. Zero shows a reassuring
   green (`colour34`) `no known vulnerabilities` rather than nothing, so you
-  can tell the check ran.
+  can tell the check ran. A repo that has Dependabot alerts **turned off**
+  is a distinct case: it shows a yellow (`colour214`) `dependabot not
+  enabled` warning instead of the green all-clear, since "off" is not the
+  same as "scanned and clean" — the green would falsely imply the latter.
+  (This is told apart from a plain no-access failure by the API's own
+  "alerts are disabled" 403 message; no-access repos stay silent, since
+  enabling alerts there isn't yours to do.)
 
 PR listing and vulnerability-alert access are **independent GitHub
 permissions** — a repo can allow one and deny the other (PRs are visible to

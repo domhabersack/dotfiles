@@ -167,6 +167,17 @@ write_cache() {
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
+@test "warns that Dependabot is not enabled instead of showing a clean scan" {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  git init -q "$BATS_TEST_TMPDIR/repo"
+  git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
+  write_cache example-owner/example-repo error 0 0 0 disabled 0 0 0
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  expected=$(printf '#[fg=colour238]example-repo#[default] · #[fg=colour214]dependabot not enabled#[default]')
+  [ "$(captured_for '@1')" = "$expected" ]
+}
+
 @test "clears @repo_pr when both PR and vulnerability halves errored" {
   add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
   git init -q "$BATS_TEST_TMPDIR/repo"
