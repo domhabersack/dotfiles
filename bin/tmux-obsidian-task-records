@@ -114,4 +114,10 @@ awk -v us="$us" -v colorfile="$colorfile" '
     printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s\n", \
       sortkey, us, project, us, notedate, us, text, us, state, us, colour, us, FILENAME, us, FNR, us, rawline
   }
-' "$colorfile" "$@" | sort -t "$us" -k1,1 -k2,2 -k5,5 -k3,3 -k8,8n
+' "$colorfile" "$@" |
+  # Status first (open before done -- " " is 0x20, "x" is 0x78, so this
+  # falls out of a plain byte sort with no extra key needed), then project
+  # (Uncategorized last), then date, then line. This puts every open task
+  # ahead of every done one, rather than interleaving each project's done
+  # tasks right after its own open ones.
+  sort -t "$us" -k5,5 -k1,1 -k2,2 -k3,3 -k8,8n

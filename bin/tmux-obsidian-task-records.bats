@@ -139,7 +139,7 @@ EOF
   [ "$unlisted_colour" = "0" ]
 }
 
-@test "orders by project (Uncategorized last), then state (open before done), then date, then line" {
+@test "orders by state first (every open task before every done one), then project, then date, then line" {
   export TMUX_OBSIDIAN_DAILY_DIR="$BATS_TEST_TMPDIR/daily"
   mkdir -p "$TMUX_OBSIDIAN_DAILY_DIR"
   printf '## Tasks\n- [x] old done #alpha\n- [ ] old open #alpha\n' > "$TMUX_OBSIDIAN_DAILY_DIR/2026-07-16 Thursday.md"
@@ -147,7 +147,10 @@ EOF
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   texts=$(printf '%s\n' "$output" | awk -F"$US" '{print $4}')
-  expected=$(printf 'old open\nnew open\nold done\nuntagged')
+  # Every open task (project alpha before Uncategorized, oldest first)
+  # comes before the one done task, even though "old done" is #alpha too --
+  # state is the primary sort key, not project.
+  expected=$(printf 'old open\nnew open\nuntagged\nold done')
   [ "$texts" = "$expected" ]
 }
 
