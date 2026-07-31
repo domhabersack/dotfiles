@@ -2,6 +2,7 @@
 # Renders each attached session's active window's repo health into that
 # window's @repo_pr option, read by status-left:
 #   dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+#   dotfiles no PRs · no known vulnerabilities
 #
 # Mirrors ~/Developer/mission-status's line format and severity color scheme
 # (see bin/tmux-repo-pr-fetch for the exact classification/dedup rules),
@@ -91,9 +92,16 @@ while read -r attached active wid path; do
 
   pr_part=''
   if [ "$pr_status" = ok ]; then
-    label=PRs
-    [ "$pr_total" -eq 1 ] && label=PR
-    pr_part="#[bold]$pr_total $label#[nobold] (#[fg=colour6]$pr_human#[default] human, #[fg=colour6]$pr_bot#[default] bot)"
+    if [ "$pr_total" -eq 0 ]; then
+      # Default footer color, not a standout style: no open PRs needs no
+      # action, so the human/bot split is noise -- mirrors the vulnerability
+      # segment's "no known vulnerabilities" treatment.
+      pr_part='no PRs'
+    else
+      label=PRs
+      [ "$pr_total" -eq 1 ] && label=PR
+      pr_part="#[bold]$pr_total $label#[nobold] (#[fg=colour6]$pr_human#[default] human, #[fg=colour6]$pr_bot#[default] bot)"
+    fi
   fi
 
   vuln_part=''
