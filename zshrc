@@ -1,4 +1,19 @@
 ################
+# HOMEBREW     #
+################
+
+# Put Homebrew's bin on PATH before anything below probes for brew-installed
+# tools (bat, delta, fzf, zoxide, gh, ...). Login shells already get this from
+# ~/.zprofile; doing it here too covers non-login shells that source ~/.zshrc
+# but not ~/.zprofile (scripts, `zsh -c`, embedded/tool shells), where those
+# `command -v ...` guards would otherwise silently fail and, e.g., leave the
+# `cat`→`bat` alias pointing at an unreachable binary. The PATH check makes it
+# a no-op once brew is already present, so it costs nothing for login shells.
+if [ -x /opt/homebrew/bin/brew ] && [[ ":$PATH:" != *":/opt/homebrew/bin:"* ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+################
 # NVM          #
 ################
 
