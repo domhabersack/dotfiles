@@ -19,9 +19,9 @@
 [core]
   excludesfile = ~/.gitignore_global
   # use delta if installed (brew install git-delta), else fall back to plain output
-  pager = if command -v delta >/dev/null 2>&1; then delta; else less; fi
+  pager = "if command -v delta >/dev/null 2>&1; then delta; else less; fi"
 [interactive]
-  diffFilter = if command -v delta >/dev/null 2>&1; then delta --color-only; else cat; fi
+  diffFilter = "if command -v delta >/dev/null 2>&1; then delta --color-only; else cat; fi"
 [delta]
   navigate = true
 [credential]
