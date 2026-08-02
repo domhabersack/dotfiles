@@ -122,7 +122,7 @@ write_cache() {
   git -C "$BATS_TEST_TMPDIR/https-repo" remote add origin https://github.com/example-owner/example-repo.git
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ "$(captured_for '@1')" = "$(printf '#[fg=colour238]example-repo #[fg=colour4]…#[default]')" ]
+  [ "$(captured_for '@1')" = "$(printf '#[fg=colour238]example-repo#[default] #[fg=colour4]…#[default]')" ]
 }
 
 @test "parses an ssh-shorthand origin the same way as https" {
@@ -131,7 +131,7 @@ write_cache() {
   git -C "$BATS_TEST_TMPDIR/ssh-repo" remote add origin git@github.com:example-owner/example-repo.git
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ "$(captured_for '@1')" = "$(printf '#[fg=colour238]example-repo #[fg=colour4]…#[default]')" ]
+  [ "$(captured_for '@1')" = "$(printf '#[fg=colour238]example-repo#[default] #[fg=colour4]…#[default]')" ]
 }
 
 @test "renders colored human/bot split only when both sides are non-zero" {
@@ -237,4 +237,41 @@ write_cache() {
     *"1 vulnerability#[nobold]"*) : ;;
     *) false ;;
   esac
+}
+
+# Drops a stub tmux-git-branch into the fake $HOME that always reports the same
+# label, so these tests assert the branch is threaded into @repo_pr without
+# depending on real git state. (The tests above leave no stub in place, so
+# their branch segment is empty — which is why their expected strings have no
+# branch.)
+stub_branch() {
+  cat > "$HOME/.dotfiles/bin/tmux-git-branch" <<EOF
+#!/bin/sh
+printf '%s' '$1'
+EOF
+  chmod +x "$HOME/.dotfiles/bin/tmux-git-branch"
+}
+
+@test "threads a dim (branch) label between the repo name and its health data" {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  git init -q "$BATS_TEST_TMPDIR/repo"
+  git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
+  write_cache example-owner/example-repo ok 0 0 0 ok 0 0 0
+  stub_branch '(topic)'
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  expected=$(printf '#[fg=colour238]example-repo#[default] #[fg=colour244](topic)#[default] · no PRs · no known vulnerabilities')
+  [ "$(captured_for '@1')" = "$expected" ]
+}
+
+@test "shows the repo name and branch alone when there is no readable health data" {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  git init -q "$BATS_TEST_TMPDIR/repo"
+  git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
+  write_cache example-owner/example-repo error 0 0 0 error 0 0 0
+  stub_branch '(topic)'
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  expected=$(printf '#[fg=colour238]example-repo#[default] #[fg=colour244](topic)#[default]')
+  [ "$(captured_for '@1')" = "$expected" ]
 }

@@ -1,0 +1,37 @@
+#!/bin/sh
+# Stamps every window with @git_branch: a "(branch)" label (see
+# bin/tmux-git-branch) for the git repository its active pane sits in, or the
+# empty string when that pane isn't in a repo. The choose-tree window format
+# (prefix w) prints #{@git_branch} right after the window name, so a repo
+# window reads "codeshots (main)" while a plain-directory window stays
+# "dotfiles".
+#
+# This covers ALL windows, which is why it exists as its own pass: the status
+# line only needs the active window's branch and gets it inline from
+# bin/tmux-repo-pr, but the choose-tree switcher lists every window and so
+# needs each one's branch, not just the focused one.
+#
+# Re-run on window create/rename/select and session change (hooks in
+# tmux.conf) for instant updates as you navigate, plus a slow ticker
+# (bin/tmux-git-branch-watch) that is what catches a `git checkout` made in a
+# window you then sit still in, with no window event to trigger a refresh.
+set -eu
+
+BRANCH="$HOME/.dotfiles/bin/tmux-git-branch"
+
+# pane_current_path is the loop's LAST field so a path containing spaces stays
+# intact; window_id never contains spaces.
+tmux list-windows -a -F '#{window_id} #{pane_current_path}' |
+while read -r wid path; do
+  if [ -n "$path" ]; then
+    label=$("$BRANCH" "$path" 2>/dev/null) || label=''
+  else
+    # No path (e.g. a window caught mid-teardown): clear rather than resolve,
+    # since an empty arg would make the helper inspect its own cwd instead.
+    label=''
+  fi
+  tmux set-window-option -t "$wid" @git_branch "$label"
+done
+
+# Repaint so a freshly-set label shows immediately, not on the next tick.
+tmux refresh-client -S 2>/dev/null

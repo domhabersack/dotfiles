@@ -171,11 +171,25 @@ the bars decay even when idle. The bar is decorative only — like a leading mar
 emoji, it is not part of the window name, so it never affects window sorting or
 coloring.
 
-`status-left` shows open PR and Dependabot-vulnerability counts for whichever
-repo the currently active pane is in, e.g.:
+Each window-list entry also shows its git **branch** in dim parentheses after the
+name, so a repo window reads `codeshots (main)` while a plain-directory window
+stays `codeshots`. `bin/tmux-git-branch` resolves the label for a directory
+(the current branch, or the short commit hash on a detached HEAD, or nothing
+outside a work tree); `bin/tmux-git-branch-windows` stamps every window's
+`@git_branch` from its active pane's path, refreshed on window
+create/rename/select and by `bin/tmux-git-branch-watch` on a timer — the timer
+is what catches a `git checkout` made in a window you then sit still in. Like
+the freshness bar, the label is rendered at display time and is **not** part of
+the window name, so it never affects sorting or coloring. The same
+`(branch)` also appears on `status-left` next to the active repo's name (see
+below), computed inline there so it's never stale.
+
+`status-left` shows the active repo's name and branch followed by its open PR
+and Dependabot-vulnerability counts, for whichever repo the currently active
+pane is in, e.g.:
 
 ```
-dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+dotfiles (main) 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 ```
 
 via `bin/tmux-repo-pr` (the renderer, triggered on window/pane switches and a

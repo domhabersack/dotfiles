@@ -1,0 +1,35 @@
+#!/bin/sh
+# Prints a compact "(branch)" label for the git repository containing the
+# directory given as $1 (default: the current directory), for display right
+# after a tmux window name -- so the window "codeshots" reads "codeshots
+# (main)". Prints nothing (exit 0) when $1 is not inside a git work tree, so a
+# plain non-repo window keeps its bare name.
+#
+# On a normal branch the label is the branch name, "(main)". On a detached
+# HEAD -- mid-rebase, mid-bisect, or a checked-out tag/commit -- there is no
+# branch to name, so it falls back to the short commit hash, "(a1b2c3d)",
+# rather than showing nothing (which would misread as "not a repo"). A freshly
+# `git init`'d repo with no commits yet is already on an unborn branch, so it
+# shows that branch name — e.g. "(main)" — just like git's own status does.
+#
+# The output carries no tmux #[...] style tags: each caller wraps it in its own
+# color (dim on the status line, a calm gray in choose-tree), which also keeps
+# this usable as a plain string from any shell context.
+set -eu
+
+dir=${1:-.}
+
+# One cheap gate: if this isn't a work tree, every later git call would just be
+# a slower way to reach the same "print nothing" -- bail immediately. This is
+# the common case (home dir, scratch windows), so it should be the fast path.
+git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+
+# --quiet: no stderr and a clean nonzero exit when HEAD isn't a branch
+# (detached), which the `||` turns into the empty-branch fallback below.
+branch=$(git -C "$dir" symbolic-ref --quiet --short HEAD 2>/dev/null) || branch=''
+if [ -z "$branch" ]; then
+  branch=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null) || branch=''
+fi
+
+[ -n "$branch" ] || exit 0
+printf '(%s)' "$branch"

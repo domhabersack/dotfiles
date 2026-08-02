@@ -27,6 +27,7 @@ set -eu
 CACHE_DIR="$HOME/.cache/tmux-repo-pr"
 OK_TTL=300      # seconds; re-check a fully-ok'd repo at most this often
 ERROR_TTL=900   # seconds; back off longer if either half errored
+BRANCH="$HOME/.dotfiles/bin/tmux-git-branch"  # renders the "(branch)" label
 
 command -v gh >/dev/null 2>&1 || {
   tmux list-windows -a -F '#{window_id}' | while read -r wid; do
@@ -70,8 +71,14 @@ while read -r attached active wid path; do
   cache_file="$CACHE_DIR/$safe.json"
   short=${repo##*/}
 
+  # "(branch)" for this window's repo, rendered dim so it reads as secondary to
+  # the repo name — computed fresh here (not read from @git_branch) so the
+  # status line never shows a stale branch. Empty on a detached/branchless repo.
+  branch=$("$BRANCH" "$path" 2>/dev/null) || branch=''
+  branch_seg=${branch:+ #[fg=colour244]$branch#[default]}
+
   if [ ! -f "$cache_file" ]; then
-    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour238]$short #[fg=colour4]…#[default]"
+    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour238]$short#[default]$branch_seg #[fg=colour4]…#[default]"
     nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
     continue
   fi
@@ -143,7 +150,13 @@ while read -r attached active wid path; do
 
   data="${pr_part}${pr_part:+${vuln_part:+ · }}${vuln_part}"
   if [ -n "$data" ]; then
-    rendered="#[fg=colour238]$short#[default] · $data"
+    rendered="#[fg=colour238]$short#[default]$branch_seg · $data"
+  elif [ -n "$branch" ]; then
+    # No health data (commonly: a repo this account can't read PRs/alerts on),
+    # but it's still a git repo -- show the name + branch alone rather than the
+    # blank we'd otherwise render, so "codeshots (main)" holds on the status
+    # line for any repo, not only the ones with a readable PR/vuln count.
+    rendered="#[fg=colour238]$short#[default]$branch_seg"
   else
     rendered=''
   fi
