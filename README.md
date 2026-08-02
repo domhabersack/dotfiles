@@ -198,9 +198,15 @@ dotfiles (main)
 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 ```
 
-The bottom row is blank for a non-repo window, a repo with no remote, or one
-whose PR/vulnerability data isn't readable; the name row above it always shows.
-The health row is rendered
+The health row only exists when there's something to put on it: for a non-repo
+window, a repo with no remote, or one whose PR/vulnerability data isn't
+readable, `bin/tmux-status-rows` shrinks the bar back to two rows (the rule and
+the name row) rather than leaving an empty trailing line, and grows it to three
+again when the active window has health to show. It's called from the tail of
+`bin/tmux-repo-pr` (so it re-evaluates on every window/pane switch and cache
+update) and from the `pane-mode-changed` hook when leaving a mode; while a pane
+is in tree-mode (`prefix w`, zoomed full-screen) the bar is hidden entirely.
+The health row itself is rendered
 via `bin/tmux-repo-pr` (the renderer, triggered on window/pane switches and a
 background ticker) and `bin/tmux-repo-pr-fetch` (the only thing that touches
 the network — two read-only `gh api` calls, no mutating calls of any kind).
