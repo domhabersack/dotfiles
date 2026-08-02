@@ -181,17 +181,26 @@ create/rename/select and by `bin/tmux-git-branch-watch` on a timer — the timer
 is what catches a `git checkout` made in a window you then sit still in. Like
 the freshness bar, the label is rendered at display time and is **not** part of
 the window name, so it never affects sorting or coloring. The same
-`(branch)` also appears on `status-left` next to the active repo's name (see
-below), computed inline there so it's never stale.
+`@git_branch` also drives the active window's name row on the status bar (see
+below), so a repo with no remote — where the PR/vulnerability line is empty —
+still gets its `(branch)` there.
 
-`status-left` shows the active repo's name and branch followed by its open PR
-and Dependabot-vulnerability counts, for whichever repo the currently active
-pane is in, e.g.:
+The status bar carries the active window's identity and repo health on two
+stacked rows (below the horizontal rule): the top row is the window name plus,
+in a git repo, its branch (`status-format[1]`, from `window_name` +
+`@git_branch`); the bottom row is that repo's open-PR and
+Dependabot-vulnerability counts (`status-format[2]`, from `status-left` →
+`@repo_pr`), kept on its own line so it doesn't crowd the name. For whichever
+repo the currently active pane is in, e.g.:
 
 ```
-dotfiles (main) 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+dotfiles (main)
+3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 ```
 
+The bottom row is blank for a non-repo window, a repo with no remote, or one
+whose PR/vulnerability data isn't readable; the name row above it always shows.
+The health row is rendered
 via `bin/tmux-repo-pr` (the renderer, triggered on window/pane switches and a
 background ticker) and `bin/tmux-repo-pr-fetch` (the only thing that touches
 the network — two read-only `gh api` calls, no mutating calls of any kind).
