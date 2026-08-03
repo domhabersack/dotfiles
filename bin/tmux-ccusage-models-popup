@@ -1,0 +1,56 @@
+#!/bin/sh
+# Aggregated per-model usage distribution over the last 30/60/90 days, in a
+# floating popup bound to `prefix + U` (see tmux.conf) -- a companion to
+# `prefix + u` (bin/tmux-ccusage-popup), which shows monthly totals without
+# a per-model split.
+#
+# One ccusage call covering the widest window (90 days) is aggregated three
+# times in jq, once per window, rather than calling ccusage three times --
+# each call re-scans every session log from scratch, and the 60/90-day
+# windows are supersets of the 30-day one anyway.
+
+export NVM_DIR="$HOME/.nvm"
+# shellcheck disable=SC1091 # external file, not part of this repo
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+json=$(ccusage claude daily --json --breakdown --offline --since "$(date -v-90d +%Y%m%d)")
+
+for days in 30 60 90; do
+  cutoff=$(date -v-"${days}"d +%Y-%m-%d)
+  printf '\nLast %s days\n' "$days"
+  # Per model: total cost/tokens and each as a percentage of the window's
+  # total, plus a TOTAL row (100%/100% by construction, not a rounded sum
+  # of the per-model percentages) so the awk table below can render it
+  # exactly like any other row.
+  printf '%s\n' "$json" | jq -r --arg cutoff "$cutoff" '
+    [.daily[] | select(.date >= $cutoff) | .modelBreakdowns[]] as $rows
+    | ($rows | map(.cost) | add // 0) as $totalcost
+    | ($rows | map(.inputTokens + .outputTokens + .cacheCreationTokens + .cacheReadTokens) | add // 0) as $totaltokens
+    | ($rows
+        | group_by(.modelName)
+        | map({
+            model: .[0].modelName,
+            cost: (map(.cost) | add),
+            tokens: (map(.inputTokens + .outputTokens + .cacheCreationTokens + .cacheReadTokens) | add)
+          })
+        | sort_by(-.cost)
+      )
+    | (.[] | [.model, (.cost * 100 / (if $totalcost == 0 then 1 else $totalcost end)), .cost, (.tokens * 100 / (if $totaltokens == 0 then 1 else $totaltokens end)), .tokens] | @tsv),
+      (["TOTAL", 100, $totalcost, 100, $totaltokens] | @tsv)
+  ' | awk -F'\t' '
+    { model[NR] = $1; costpct[NR] = $2 + 0; cost[NR] = $3 + 0; tokpct[NR] = $4 + 0; tok[NR] = $5 + 0; n = NR
+      if (length($1) > w) w = length($1) }
+    END {
+      hdr = "Model"; while (length(hdr) < w) hdr = hdr " "
+      printf "  %s  %6s  %10s  %6s  %10s\n", hdr, "cost%", "cost", "tok%", "tokens"
+      for (i = 1; i <= n; i++) {
+        pad = model[i]; while (length(pad) < w) pad = pad " "
+        if (model[i] == "TOTAL") {
+          sep = ""; for (j = 0; j < w + 34; j++) sep = sep "-"
+          print "  " sep
+        }
+        printf "  %s  %5.1f%%  $%9.2f  %5.1f%%  %8.1fM\n", pad, costpct[i], cost[i], tokpct[i], tok[i] / 1000000
+      }
+    }
+  '
+done

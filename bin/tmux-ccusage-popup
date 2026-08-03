@@ -6,5 +6,9 @@ export NVM_DIR="$HOME/.nvm"
 # shellcheck disable=SC1091 # external file, not part of this repo
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-# Per-month Claude usage with a per-model breakdown.
-ccusage claude monthly --breakdown
+# --since caps the report at (up to) the last six months; --since just
+# filters, so a vault with less history than that renders exactly what
+# exists, no error. No --breakdown here -- the per-model split lives in the
+# companion prefix+U popup (bin/tmux-ccusage-models-popup) instead, so this
+# view stays a single, uncluttered monthly-totals table.
+ccusage claude monthly --since "$(date -v-6m -v1d +%Y%m%d)"
