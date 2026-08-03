@@ -97,6 +97,8 @@ while read -r attached active wid path; do
       ((.checks_state // "") | if . == "" then "-" else . end),
       (.checks_total // 0),
       (.checks_skipped // 0),
+      (.checks_failed // 0),
+      (.checks_pending // 0),
       (.unresolved // 0),
       (.fetched_at // 0)
     ] | map(tostring) | join(" ")' "$cache_file" 2>/dev/null) || line=''
@@ -106,10 +108,11 @@ while read -r attached active wid path; do
     status=$1; has=$2; number=$3; additions=$4; deletions=$5; changed=$6
     draft=$7; review=$8; checks_state=$9
     shift 9
-    checks_total=$1; checks_skipped=$2; unresolved=$3; fetched_at=$4
+    checks_total=$1; checks_skipped=$2; checks_failed=$3; checks_pending=$4; unresolved=$5; fetched_at=$6
   else
     status=error; has=false; number=0; additions=0; deletions=0; changed=0
-    draft=false; review=-; checks_state=-; checks_total=0; checks_skipped=0; unresolved=0; fetched_at=0
+    draft=false; review=-; checks_state=-; checks_total=0; checks_skipped=0
+    checks_failed=0; checks_pending=0; unresolved=0; fetched_at=0
   fi
 
   rendered=''
@@ -142,8 +145,29 @@ while read -r attached active wid path; do
             checks_seg="#[fg=colour2]all checks have passed#[default]"
           fi
           ;;
-        FAILURE|ERROR)    checks_seg="#[fg=colour1]some checks were not successful#[default]" ;;
-        PENDING|EXPECTED) checks_seg="#[fg=colour3]some checks haven't completed yet#[default]" ;;
+        FAILURE|ERROR)
+          # Lead with the count of what failed; append how many are still
+          # running, if any, so a red row says both "N broke" and "M yet to
+          # report". Fall back to GitHub's phrasing if the bucket count is
+          # somehow zero (e.g. >100 contexts, past the fetch's page).
+          if [ "$checks_failed" -gt 0 ]; then
+            flabel=checks; [ "$checks_failed" -eq 1 ] && flabel=check
+            checks_seg="#[fg=colour1]$checks_failed $flabel failed#[default]"
+          else
+            checks_seg="#[fg=colour1]some checks were not successful#[default]"
+          fi
+          if [ "$checks_pending" -gt 0 ]; then
+            checks_seg="$checks_seg #[fg=colour3]· $checks_pending pending#[default]"
+          fi
+          ;;
+        PENDING|EXPECTED)
+          if [ "$checks_pending" -gt 0 ]; then
+            plabel=checks; [ "$checks_pending" -eq 1 ] && plabel=check
+            checks_seg="#[fg=colour3]$checks_pending $plabel pending#[default]"
+          else
+            checks_seg="#[fg=colour3]some checks haven't completed yet#[default]"
+          fi
+          ;;
         *)                checks_seg="#[fg=colour244]no checks#[default]" ;;
       esac
     fi

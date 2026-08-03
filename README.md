@@ -226,15 +226,16 @@ in one query keeps it to one round trip). Only **open** PRs are queried — a
 merged or closed PR vanishes, since this is open-work visibility, not history.
 Its segments: diff size shows files changed and colored `+added` (`colour2`,
 green) / `-deleted` (`colour1`, red); **checks** roll up `statusCheckRollup`
-(GitHub's own merge of commit statuses and check runs) into GitHub's own
-merge-box wording, lowercased — a green `all checks have passed`, red `some
-checks were not successful`, or yellow `some checks haven't completed yet`. A
-head commit with no checks at all shows a dim `no checks` (so "none configured"
-is visible rather than silently absent), and SKIPPED runs — which the rollup
-state folds into a pass — are called out as a dim `(N skipped)` alongside the
-green pass (or `all checks skipped` when nothing actually ran), so an all-green
-row can't hide that a check never executed. **review** shows a green
-`approved`, red `changes requested`, or a dim `draft`
+(GitHub's own merge of commit statuses and check runs), bucketing the
+individual contexts so the numbers that matter are visible: a green `all checks
+have passed`, a red `N checks failed` (with a yellow `· M pending` appended when
+some are still running), or a yellow `N checks pending`. A head commit with no
+checks at all shows a dim `no checks` (so "none configured" is visible rather
+than silently absent), and SKIPPED runs — which the rollup state folds into a
+pass — are called out as a dim `(N skipped)` alongside the green pass (or `all
+checks skipped` when nothing actually ran), so an all-green row can't hide that
+a check never executed. **review** shows a green `approved`, red `changes
+requested`, or a dim `draft`
 (a draft PR isn't up for review, so `draft` replaces the decision) — a
 not-yet-reviewed PR shows nothing there; **unresolved** is a yellow count of
 open review conversations, omitted at zero. Cached per repo+branch under

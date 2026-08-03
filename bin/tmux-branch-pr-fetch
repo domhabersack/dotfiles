@@ -95,6 +95,27 @@ json=$(printf '%s' "$raw" | jq -c --arg status "$status" --argjson now "$now" '
     {status:"ok", fetched_at:$now, has:false}
   else
     ($pr.commits.nodes[0].commit.statusCheckRollup) as $roll |
+    # Bucket each check context so the renderer can show counts. A CheckRun
+    # carries a status (is it done?) and, once done, a conclusion; a legacy
+    # StatusContext carries only a state. NEUTRAL counts as passed (non-blocking),
+    # SKIPPED is its own bucket (the rollup state folds it into SUCCESS), and
+    # anything else finished — FAILURE, TIMED_OUT, CANCELLED, ERROR, … — is failed.
+    ([ $roll.contexts.nodes[]? |
+       if .__typename == "CheckRun" then
+         if (.status // "") != "COMPLETED" then "pending"
+         else ((.conclusion // "") |
+           if . == "SUCCESS" or . == "NEUTRAL" then "passed"
+           elif . == "SKIPPED" then "skipped"
+           elif . == "" then "pending"
+           else "failed" end)
+         end
+       elif .__typename == "StatusContext" then
+         ((.state // "") |
+           if . == "SUCCESS" then "passed"
+           elif . == "PENDING" or . == "EXPECTED" then "pending"
+           else "failed" end)
+       else "pending" end
+     ]) as $cats |
     {
       status:"ok", fetched_at:$now, has:true,
       number:      $pr.number,
@@ -105,13 +126,17 @@ json=$(printf '%s' "$raw" | jq -c --arg status "$status" --argjson now "$now" '
       review:      ($pr.reviewDecision // ""),
       unresolved:  ([ $pr.reviewThreads.nodes[] | select(.isResolved == false) ] | length),
       # checks_state is "" when the head commit has no rollup at all (no checks
-      # configured); otherwise the overall rollup state. checks_total /
-      # checks_skipped let the renderer tell "no checks" from a real result and
-      # annotate skipped runs — SKIPPED is a CheckRun conclusion the rollup
-      # state folds into SUCCESS.
+      # configured); otherwise the overall rollup state, which the renderer uses
+      # to pick pass/fail/pending. checks_total distinguishes "no checks" from a
+      # real result; the per-bucket counts (from the first 100 contexts) give the
+      # renderer the numbers to show — how many failed, are still running, or
+      # were skipped.
       checks_state:   ($roll.state // ""),
       checks_total:   ($roll.contexts.totalCount // 0),
-      checks_skipped: ([ $roll.contexts.nodes[]? | select(.__typename == "CheckRun" and .conclusion == "SKIPPED") ] | length)
+      checks_passed:  ([ $cats[] | select(. == "passed") ]  | length),
+      checks_failed:  ([ $cats[] | select(. == "failed") ]  | length),
+      checks_pending: ([ $cats[] | select(. == "pending") ] | length),
+      checks_skipped: ([ $cats[] | select(. == "skipped") ] | length)
     }
   end
 ') || json=$(printf '{"status":"error","fetched_at":%s,"has":false}' "$now")

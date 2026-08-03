@@ -163,11 +163,24 @@ write_cache() {
   add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
   make_repo "$BATS_TEST_TMPDIR/repo"
   write_cache example-owner/example-repo main \
-    '{"status":"ok","has":true,"number":9,"additions":1,"deletions":1,"changed":1,"draft":false,"review":"","checks_state":"FAILURE","checks_total":2,"checks_skipped":0,"unresolved":0,"fetched_at":0}'
+    '{"status":"ok","has":true,"number":9,"additions":1,"deletions":1,"changed":1,"draft":false,"review":"","checks_state":"FAILURE","checks_total":3,"checks_failed":2,"checks_pending":0,"checks_skipped":0,"unresolved":0,"fetched_at":0}'
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   case "$(captured_for '@1')" in
-    *"#[fg=colour1]some checks were not successful#[default]"*) : ;;
+    *"#[fg=colour1]2 checks failed#[default]"*) : ;;
+    *) false ;;
+  esac
+}
+
+@test "appends the pending count to a failing rollup, and singularizes 'check'" {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  make_repo "$BATS_TEST_TMPDIR/repo"
+  write_cache example-owner/example-repo main \
+    '{"status":"ok","has":true,"number":9,"additions":1,"deletions":1,"changed":1,"draft":false,"review":"","checks_state":"FAILURE","checks_total":3,"checks_failed":1,"checks_pending":2,"checks_skipped":0,"unresolved":0,"fetched_at":0}'
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  case "$(captured_for '@1')" in
+    *"#[fg=colour1]1 check failed#[default] #[fg=colour3]· 2 pending#[default]"*) : ;;
     *) false ;;
   esac
 }
@@ -176,11 +189,11 @@ write_cache() {
   add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
   make_repo "$BATS_TEST_TMPDIR/repo"
   write_cache example-owner/example-repo main \
-    '{"status":"ok","has":true,"number":9,"additions":1,"deletions":1,"changed":1,"draft":false,"review":"","checks_state":"PENDING","checks_total":2,"checks_skipped":0,"unresolved":0,"fetched_at":0}'
+    '{"status":"ok","has":true,"number":9,"additions":1,"deletions":1,"changed":1,"draft":false,"review":"","checks_state":"PENDING","checks_total":2,"checks_failed":0,"checks_pending":2,"checks_skipped":0,"unresolved":0,"fetched_at":0}'
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   case "$(captured_for '@1')" in
-    *"#[fg=colour3]some checks haven't completed yet#[default]"*) : ;;
+    *"#[fg=colour3]2 checks pending#[default]"*) : ;;
     *) false ;;
   esac
 }
