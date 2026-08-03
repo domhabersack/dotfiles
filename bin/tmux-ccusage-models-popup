@@ -1,29 +1,35 @@
 #!/bin/sh
-# Aggregated per-model usage distribution over the last 30/60/90 days, in a
-# floating popup bound to `prefix + U` (see tmux.conf) -- a companion to
-# `prefix + u` (bin/tmux-ccusage-popup), which shows monthly totals without
-# a per-model split.
+# Aggregated per-model usage distribution for this month (to date) and last
+# month (the full previous calendar month), in a floating popup bound to
+# `prefix + i` (see tmux.conf) -- a companion to `prefix + u`
+# (bin/tmux-ccusage-popup), which shows monthly totals without a per-model
+# split.
 #
-# One ccusage call covering the widest window (90 days) is aggregated three
-# times in jq, once per window, rather than calling ccusage three times --
-# each call re-scans every session log from scratch, and the 60/90-day
-# windows are supersets of the 30-day one anyway.
+# One ccusage call covering both windows (from the start of last month
+# through today) is aggregated twice in jq, once per window, rather than
+# calling ccusage twice -- each call re-scans every session log from
+# scratch.
 
 export NVM_DIR="$HOME/.nvm"
 # shellcheck disable=SC1091 # external file, not part of this repo
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-json=$(ccusage claude daily --json --breakdown --offline --since "$(date -v-90d +%Y%m%d)")
+thismonth_start=$(date -v1d +%Y-%m-%d)
+lastmonth_start=$(date -v-1m -v1d +%Y-%m-%d)
+lastmonth_end=$(date -v1d -v-1d +%Y-%m-%d)
 
-for days in 30 60 90; do
-  cutoff=$(date -v-"${days}"d +%Y-%m-%d)
-  printf '\nLast %s days\n' "$days"
-  # Per model: total cost/tokens and each as a percentage of the window's
-  # total, plus a TOTAL row (100%/100% by construction, not a rounded sum
-  # of the per-model percentages) so the awk table below can render it
-  # exactly like any other row.
-  printf '%s\n' "$json" | jq -r --arg cutoff "$cutoff" '
-    [.daily[] | select(.date >= $cutoff) | .modelBreakdowns[]] as $rows
+json=$(ccusage claude daily --json --breakdown --offline --since "$(date -v-1m -v1d +%Y%m%d)")
+
+# Per model: total cost/tokens and each as a percentage of the window's
+# total, plus a TOTAL row (100%/100% by construction, not a rounded sum of
+# the per-model percentages) so the awk table below can render it exactly
+# like any other row. $until empty means "no upper bound" (this month, to
+# date); non-empty bounds it at the end of last month.
+render_window() {
+  label="$1"; since="$2"; until="$3"
+  printf '\n%s\n' "$label"
+  printf '%s\n' "$json" | jq -r --arg since "$since" --arg until "$until" '
+    [.daily[] | select(.date >= $since and ($until == "" or .date <= $until)) | .modelBreakdowns[]] as $rows
     | ($rows | map(.cost) | add // 0) as $totalcost
     | ($rows | map(.inputTokens + .outputTokens + .cacheCreationTokens + .cacheReadTokens) | add // 0) as $totaltokens
     | ($rows
@@ -53,4 +59,7 @@ for days in 30 60 90; do
       }
     }
   '
-done
+}
+
+render_window "This month (to date)" "$thismonth_start" ""
+render_window "Last month" "$lastmonth_start" "$lastmonth_end"
