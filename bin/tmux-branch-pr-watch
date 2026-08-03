@@ -1,0 +1,21 @@
+#!/bin/sh
+# Starts a background ticker that re-runs tmux-branch-pr on a fixed interval, so
+# a `git checkout` (or a CI run finishing, a review landing, a comment being
+# resolved) in a window you then sit still in — with no window/pane event to
+# trigger a re-render — still gets picked up within one tick, and stale
+# per-branch caches get refreshed even while idle. Single-instance guarded:
+# safe to call on every config reload. Mirrors bin/tmux-repo-pr-watch.
+
+PIDFILE=/tmp/tmux-branch-pr-watch.pid
+INTERVAL=60
+
+# Reuse the running ticker if it is still alive.
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  exit 0
+fi
+
+nohup sh -c \
+  'while :; do ~/.dotfiles/bin/tmux-branch-pr; sleep '"$INTERVAL"'; done' \
+  >/dev/null 2>&1 &
+
+echo $! > "$PIDFILE"
