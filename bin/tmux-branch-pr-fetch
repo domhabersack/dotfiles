@@ -52,6 +52,7 @@ now=$(date +%s)
 # overall pass/fail/pending, but the individual `contexts` are needed to tell
 # "no checks configured" (a null rollup / zero contexts) from a real result and
 # to count SKIPPED checks — neither of which the rollup state alone distinguishes.
+# shellcheck disable=SC2016 # single-quoted on purpose: $owner/$name/$branch are GraphQL variables, not shell ones — they must reach gh literally
 query='query($owner:String!,$name:String!,$branch:String!){
   repository(owner:$owner,name:$name){
     pullRequests(headRefName:$branch, states:OPEN, first:1, orderBy:{field:CREATED_AT, direction:DESC}){
