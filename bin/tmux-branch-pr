@@ -89,6 +89,7 @@ while read -r attached active wid path; do
     [ (.status // "error"),
       (.has // false),
       (.number // 0),
+      (.commits // 0),
       (.additions // 0),
       (.deletions // 0),
       (.changed // 0),
@@ -105,12 +106,12 @@ while read -r attached active wid path; do
   if [ -n "$line" ]; then
     # shellcheck disable=SC2086  # deliberate: split jq's space-joined fields into positional params
     set -- $line
-    status=$1; has=$2; number=$3; additions=$4; deletions=$5; changed=$6
-    draft=$7; review=$8; checks_state=$9
+    status=$1; has=$2; number=$3; commits=$4; additions=$5; deletions=$6; changed=$7
+    draft=$8; review=$9
     shift 9
-    checks_total=$1; checks_skipped=$2; checks_failed=$3; checks_pending=$4; unresolved=$5; fetched_at=$6
+    checks_state=$1; checks_total=$2; checks_skipped=$3; checks_failed=$4; checks_pending=$5; unresolved=$6; fetched_at=$7
   else
-    status=error; has=false; number=0; additions=0; deletions=0; changed=0
+    status=error; has=false; number=0; commits=0; additions=0; deletions=0; changed=0
     draft=false; review=-; checks_state=-; checks_total=0; checks_skipped=0
     checks_failed=0; checks_pending=0; unresolved=0; fetched_at=0
   fi
@@ -125,8 +126,10 @@ while read -r attached active wid path; do
       # shellcheck disable=SC2209  # 'file' is a literal string here, not the file(1) command
       files_label=file
     fi
+    commits_label=commits
+    [ "$commits" -eq 1 ] && commits_label=commit
     diff="#[fg=colour2]+$additions#[default] #[fg=colour1]-$deletions#[default]"
-    parts="PR ##$number · $changed $files_label · $diff"
+    parts="PR ##$number · $commits $commits_label · $changed $files_label · $diff"
 
     # Checks: GitHub's own merge-box wording, lowercased to match the bar's
     # style. A null rollup / zero contexts is "no checks" (none configured or

@@ -192,8 +192,8 @@ rule):
 1. **Name + branch** (`status-format[1]`, from `window_name` + `@git_branch`) —
    always present; the window name plus, in a git repo, its branch.
 2. **Branch PR** (`status-format[2]`, from `@branch_pr`) — the open pull request
-   whose head *is* the current branch, if one exists: its number, diff size,
-   checks, review state, and unresolved conversations. This is "open work"
+   whose head *is* the current branch, if one exists: its number, commit count,
+   diff size, checks, review state, and unresolved conversations. This is "open work"
    visibility — the state of the PR the window in front of you is producing.
 3. **Repo health** (`@repo_pr`, from `status-left`) — that repo's open-PR and
    Dependabot-vulnerability *counts* across the whole repo, kept off the name so
@@ -205,7 +205,7 @@ PR the health row slides up. For whichever repo the active pane is in, e.g.:
 
 ```
 dotfiles (feat/foo)
-PR #42 · 3 files · +120 -30 · all checks have passed · approved · 2 unresolved
+PR #42 · 12 commits · 3 files · +120 -30 · all checks have passed · approved · 2 unresolved
 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 ```
 
@@ -227,8 +227,9 @@ merged or closed PR vanishes, since this is open-work visibility, not history �
 and a PR opened from a **fork** that happens to share your branch name is
 skipped (only a same-repo head counts as "the PR for this branch"), so a
 contributor's fork PR can't be mis-attributed to your window.
-Its segments: diff size shows files changed and colored `+added` (`colour2`,
-green) / `-deleted` (`colour1`, red); **checks** roll up `statusCheckRollup`
+Its segments: a pluralized **commit count** (`12 commits` / `1 commit`) and diff
+size (files changed, then colored `+added` (`colour2`, green) / `-deleted`
+(`colour1`, red)) size up the PR at a glance; **checks** roll up `statusCheckRollup`
 (GitHub's own merge of commit statuses and check runs), bucketing the
 individual contexts so the numbers that matter are visible: a green `all checks
 have passed`, a red `N checks failed` (with a yellow `· M pending` appended when

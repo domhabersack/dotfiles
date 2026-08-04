@@ -59,7 +59,7 @@ query='query($owner:String!,$name:String!,$branch:String!){
       nodes{
         number additions deletions changedFiles isDraft reviewDecision isCrossRepository
         reviewThreads(first:100){ nodes{ isResolved } }
-        commits(last:1){ nodes{ commit{ statusCheckRollup{
+        commits(last:1){ totalCount nodes{ commit{ statusCheckRollup{
           state
           contexts(first:100){
             totalCount
@@ -126,6 +126,7 @@ json=$(printf '%s' "$raw" | jq -c --arg status "$status" --argjson now "$now" '
     {
       status:"ok", fetched_at:$now, has:true,
       number:      $pr.number,
+      commits:     ($pr.commits.totalCount // 0),
       additions:   $pr.additions,
       deletions:   $pr.deletions,
       changed:     $pr.changedFiles,

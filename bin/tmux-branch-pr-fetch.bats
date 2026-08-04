@@ -97,7 +97,7 @@ write_response() {
     "number":42,"additions":100,"deletions":5,"changedFiles":7,
     "isDraft":false,"reviewDecision":"APPROVED","isCrossRepository":false,
     "reviewThreads":{"nodes":[{"isResolved":false},{"isResolved":true},{"isResolved":false}]},
-    "commits":{"nodes":[{"commit":{"statusCheckRollup":{
+    "commits":{"totalCount":8,"nodes":[{"commit":{"statusCheckRollup":{
       "state":"FAILURE",
       "contexts":{"totalCount":9,"nodes":[
         {"__typename":"CheckRun","conclusion":"SUCCESS","status":"COMPLETED"},
@@ -118,6 +118,7 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(cache_field has)" = "true" ]
   [ "$(cache_field number)" = "42" ]
+  [ "$(cache_field commits)" = "8" ]
   [ "$(cache_field checks_state)" = "FAILURE" ]
   [ "$(cache_field checks_total)" = "9" ]
   # passed: SUCCESS + NEUTRAL (CheckRun) + SUCCESS (StatusContext) = 3
