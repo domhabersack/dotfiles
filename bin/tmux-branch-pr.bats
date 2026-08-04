@@ -198,7 +198,7 @@ write_cache() {
   esac
 }
 
-@test "shows 'draft' instead of a review decision for a draft PR" {
+@test "shows '(draft)' next to the PR number instead of a review decision" {
   add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
   make_repo "$BATS_TEST_TMPDIR/repo"
   write_cache example-owner/example-repo main \
@@ -206,7 +206,7 @@ write_cache() {
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   out="$(captured_for '@1')"
-  case "$out" in *"#[fg=colour244]draft#[default]"*) : ;; *) false ;; esac
+  case "$out" in *"PR ##9 #[fg=colour244](draft)#[default]"*) : ;; *) false ;; esac
   case "$out" in *approved*) false ;; *) : ;; esac
 }
 

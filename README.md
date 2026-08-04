@@ -238,7 +238,9 @@ skipped (only a same-repo head counts as "the PR for this branch"), so a
 contributor's fork PR can't be mis-attributed to your window.
 Its segments: a pluralized **commit count** (`12 commits` / `1 commit`) and diff
 size (files changed, then colored `+added` (`colour2`, green) / `-deleted`
-(`colour1`, red)) size up the PR at a glance; **checks** roll up `statusCheckRollup`
+(`colour1`, red)) size up the PR at a glance (a draft PR renders as `PR #42 (draft)`, the
+`(draft)` tag sitting right next to the number rather than as a separate
+segment later in the row); **checks** roll up `statusCheckRollup`
 (GitHub's own merge of commit statuses and check runs), bucketing the
 individual contexts so the numbers that matter are visible: a green `all checks
 have passed`, a red `N checks failed` (with a yellow `· M pending` appended when
@@ -247,10 +249,10 @@ checks at all shows a dim `no checks` (so "none configured" is visible rather
 than silently absent), and SKIPPED runs — which the rollup state folds into a
 pass — are called out as a dim `(N skipped)` alongside the green pass (or `all
 checks skipped` when nothing actually ran), so an all-green row can't hide that
-a check never executed. **review** shows a green `approved`, red `changes
-requested`, or a dim `draft`
-(a draft PR isn't up for review, so `draft` replaces the decision) — a
-not-yet-reviewed PR shows nothing there; **unresolved** is a yellow count of
+a check never executed. **review** shows a green `approved` or red `changes
+requested` — a draft PR isn't up for review, so it gets no review segment here
+(its draft state already renders next to the PR number), and a not-yet-reviewed
+PR shows nothing there either; **unresolved** is a yellow count of
 open review conversations, omitted at zero. Cached per repo+branch under
 `~/.cache/tmux-branch-pr/`; a branch seen for the first time shows nothing (no
 flashed placeholder row) until its fetch lands.

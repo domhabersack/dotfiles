@@ -129,7 +129,11 @@ while read -r attached active wid path; do
     commits_label=commits
     [ "$commits" -eq 1 ] && commits_label=commit
     diff="#[fg=colour2]+$additions#[default] #[fg=colour1]-$deletions#[default]"
-    parts="PR ##$number · $commits $commits_label · $changed $files_label · $diff"
+    parts="PR ##$number"
+    # A draft PR isn't up for review, so that's surfaced right next to the
+    # number rather than as a separate segment later in the row.
+    [ "$draft" = true ] && parts="$parts #[fg=colour244](draft)#[default]"
+    parts="$parts · $commits $commits_label · $changed $files_label · $diff"
 
     # Checks: GitHub's own merge-box wording, lowercased to match the bar's
     # style. A null rollup / zero contexts is "no checks" (none configured or
@@ -176,13 +180,12 @@ while read -r attached active wid path; do
     fi
     parts="$parts · $checks_seg"
 
-    # Review state. A draft PR isn't up for review yet, so "draft" replaces the
-    # review decision rather than sitting alongside it. REVIEW_REQUIRED (nobody
-    # has weighed in) is omitted as noise — only approved / changes-requested,
-    # the states that actually change what you'd do next, get a segment.
-    if [ "$draft" = true ]; then
-      parts="$parts · #[fg=colour244]draft#[default]"
-    else
+    # Review state. A draft PR isn't up for review yet (and already shows
+    # "(draft)" next to the number above), so it gets no review segment here.
+    # REVIEW_REQUIRED (nobody has weighed in) is omitted as noise — only
+    # approved / changes-requested, the states that actually change what
+    # you'd do next, get a segment.
+    if [ "$draft" != true ]; then
       case "$review" in
         APPROVED)          parts="$parts · #[fg=colour2]approved#[default]" ;;
         CHANGES_REQUESTED) parts="$parts · #[fg=colour1]changes requested#[default]" ;;
