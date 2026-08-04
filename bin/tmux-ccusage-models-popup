@@ -1,0 +1,81 @@
+#!/bin/sh
+# Aggregated per-model usage distribution for this month (to date) and last
+# month (the full previous calendar month), in a floating popup bound to
+# `prefix + y` (see tmux.conf) -- a companion to `prefix + u`
+# (bin/tmux-ccusage-popup), which shows monthly totals without a per-model
+# split.
+#
+# One ccusage call covering both windows (from the start of last month
+# through today) is aggregated twice in jq, once per window, rather than
+# calling ccusage twice -- each call re-scans every session log from
+# scratch. ccusage has no currency flag; every cost figure it reports is
+# USD, which is why that's spelled out once in the column header rather
+# than repeated on every row.
+#
+# No --offline: that mode prices usage from a pricing table bundled in the
+# installed ccusage package, which lags newly-released models (confirmed:
+# a model still showed $0 cost weeks after release under --offline, while
+# the live pricing fetched here already had it priced correctly).
+
+export NVM_DIR="$HOME/.nvm"
+# shellcheck disable=SC1091 # external file, not part of this repo
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+thismonth_start=$(date -v1d +%Y-%m-%d)
+lastmonth_start=$(date -v-1m -v1d +%Y-%m-%d)
+lastmonth_end=$(date -v1d -v-1d +%Y-%m-%d)
+
+json=$(ccusage claude daily --json --breakdown --since "$(date -v-1m -v1d +%Y%m%d)")
+
+# Both tables render at the same model-name column width, computed once
+# across every model seen in either window (the fetched range is a
+# superset of both), rather than each table sizing itself independently --
+# otherwise the two tables line up differently whenever one window used a
+# model the other didn't.
+width=$(printf '%s\n' "$json" | jq -r '[.daily[].modelBreakdowns[].modelName] | map(length) | max // 5')
+[ "$width" -ge 5 ] || width=5
+
+# Per model: total cost/tokens and each as a percentage of the window's
+# total, plus a TOTAL row (100%/100% by construction, not a rounded sum of
+# the per-model percentages) so the awk table below can render it exactly
+# like any other row. $until empty means "no upper bound" (this month, to
+# date); non-empty bounds it at the end of last month.
+render_window() {
+  label="$1"; since="$2"; until="$3"
+  printf '\n%s\n' "$label"
+  printf '%s\n' "$json" | jq -r --arg since "$since" --arg until "$until" '
+    [.daily[] | select(.date >= $since and ($until == "" or .date <= $until)) | .modelBreakdowns[]] as $rows
+    | ($rows | map(.cost) | add // 0) as $totalcost
+    | ($rows | map(.inputTokens + .outputTokens + .cacheCreationTokens + .cacheReadTokens) | add // 0) as $totaltokens
+    | ($rows
+        | group_by(.modelName)
+        | map({
+            model: .[0].modelName,
+            cost: (map(.cost) | add),
+            tokens: (map(.inputTokens + .outputTokens + .cacheCreationTokens + .cacheReadTokens) | add)
+          })
+        | sort_by(-.cost)
+      )
+    | (.[] | [.model, (.cost * 100 / (if $totalcost == 0 then 1 else $totalcost end)), .cost, (.tokens * 100 / (if $totaltokens == 0 then 1 else $totaltokens end)), .tokens] | @tsv),
+      (["TOTAL", 100, $totalcost, 100, $totaltokens] | @tsv)
+  ' | awk -F'\t' -v w="$width" '
+    { model[NR] = $1; costpct[NR] = $2 + 0; cost[NR] = $3 + 0; tokpct[NR] = $4 + 0; tok[NR] = $5 + 0; n = NR
+      if (length($1) > w) w = length($1) }
+    END {
+      hdr = "Model"; while (length(hdr) < w) hdr = hdr " "
+      headerline = sprintf("  %s  %6s  %10s  %6s  %10s", hdr, "cost%", "cost (USD)", "tok%", "tokens")
+      print headerline
+      for (i = 1; i <= n; i++) {
+        pad = model[i]; while (length(pad) < w) pad = pad " "
+        if (model[i] == "TOTAL") {
+          sep = ""; for (j = 0; j < length(headerline) - 2; j++) sep = sep "-"
+          print "  " sep
+        }
+        printf "  %s  %5.1f%%  $%9.2f  %5.1f%%  %8.1fM\n", pad, costpct[i], cost[i], tokpct[i], tok[i] / 1000000
+      }
+    }
+  '
+}
+
+render_window "This month (to date)" "$thismonth_start" ""
+render_window "Last month" "$lastmonth_start" "$lastmonth_end"
