@@ -174,9 +174,13 @@ coloring.
 Each window-list entry also shows its git **branch** in dim parentheses after
 the name — but only when it's *not* `main`, so a window parked on a feature
 branch reads `codeshots (feat/foo)` and stands out, while a window on the trunk
-stays a plain `codeshots` (as does a plain-directory window). The trunk is the
-default, so labelling it on every window is noise; hiding it makes the windows
-doing feature work the ones that draw the eye. `bin/tmux-git-branch` resolves
+stays a plain `codeshots`. The trunk is the default, so labelling it on every
+window is noise; hiding it makes the windows doing feature work the ones that
+draw the eye. A window whose pane isn't in a git repo at all — a scratch or
+utility window — has its **name italicized** instead, so non-repo windows read
+as visually distinct from the code repos (an empty `@git_branch` is the signal;
+italics needs a terminal whose font has an italic face, and shows upright where
+it can't render). `bin/tmux-git-branch` resolves
 the label for a directory (the current branch, or the short commit hash on a
 detached HEAD, or nothing outside a work tree); `bin/tmux-git-branch-windows`
 stamps every window's `@git_branch` from its active pane's path, refreshed on
