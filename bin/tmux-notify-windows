@@ -1,0 +1,36 @@
+#!/bin/sh
+# For each session, list the names of its windows that have a pending bell into
+# that session's status-right — a red "🔔 name · name", empty when none — so you
+# can tell from any window that another window wants attention without opening
+# choose-tree. The bell is the same signal as the 🔔 in the choose-tree window
+# list (window_bell_flag; e.g. Claude Code waiting for input) and clears when you
+# visit the window.
+#
+# Per-session: each session's status-right lists only its own windows, so a
+# client sees the windows in the session it's attached to. Driven by the
+# alert-bell hook (a new bell) and the window-select / -change / -unlink hooks
+# (a bell clears when you visit its window, or the window closes), plus once at
+# startup — see tmux.conf. status-right is otherwise unused.
+set -eu
+
+tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r sess; do
+  # ' · '-joined names of this session's windows with a pending bell. The flag
+  # (0/1, never contains spaces) is read as the first field and the name as the
+  # rest, so a window name containing spaces stays intact.
+  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag} #{window_name}' 2>/dev/null |
+    while IFS=' ' read -r flag name; do
+      if [ "$flag" = 1 ]; then printf '%s · ' "$name"; fi
+    done)
+  names=${names% · }
+
+  if [ -n "$names" ]; then
+    tmux set-option -t "$sess" status-right "#[fg=colour1]🔔 $names#[default]"
+  else
+    tmux set-option -t "$sess" status-right ''
+  fi
+done
+
+# Repaint so a freshly-set indicator shows immediately, not on the next tick.
+# `|| true` so a run with no client attached (nothing to repaint) doesn't fail
+# the script under `set -e`.
+tmux refresh-client -S 2>/dev/null || true
