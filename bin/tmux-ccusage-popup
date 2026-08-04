@@ -17,7 +17,12 @@ export NVM_DIR="$HOME/.nvm"
 # Create / Cache Read columns -- Total Tokens and Cost still reflect true
 # totals (which do include cache tokens; that's real spend), only the
 # breakdown of how much of that total came from the cache is hidden.
-json=$(ccusage claude monthly --json --offline --since "$(date -v-6m -v1d +%Y%m%d)")
+#
+# No --offline: that mode prices usage from a pricing table bundled in the
+# installed ccusage package, which lags newly-released models (confirmed:
+# a model still showed $0 cost weeks after release under --offline, while
+# the live pricing fetched here already had it priced correctly).
+json=$(ccusage claude monthly --json --since "$(date -v-6m -v1d +%Y%m%d)")
 
 printf '%s\n' "$json" | jq -r '
   (.monthly[] | [.month, (.modelsUsed | join(", ")), .inputTokens, .outputTokens, .totalTokens, .totalCost] | @tsv),
