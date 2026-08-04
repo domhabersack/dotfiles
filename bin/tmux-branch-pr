@@ -1,0 +1,215 @@
+#!/bin/sh
+# Renders the active window's branch pull-request status into that window's
+# @branch_pr option, shown on its own status row (status-format[2]) that only
+# exists while there IS a PR for the branch:
+#   PR #42 · 3 files · +120 -30 · checks ✓ · approved · 2 unresolved
+# Empty (no row) when the active window isn't in a repo, its branch has no open
+# PR, or the data isn't readable. The window name and branch render on the row
+# ABOVE this (status-format[1], from window_name + @git_branch), so this stays
+# PR-status-only and never repeats them.
+#
+# This is BRANCH-scoped "open work" visibility — the state of the PR the window
+# in front of you is producing — and is a separate axis from bin/tmux-repo-pr,
+# which shows REPO-wide open-PR/vulnerability health on the row below. Both can
+# show at once (see bin/tmux-status-rows for how the bar sizes itself), one, or
+# neither.
+#
+# Resolution (git remote/branch) and cache reads here are local/fast; the only
+# network call (via `gh`, read-only) happens in the detached, lock-guarded
+# bin/tmux-branch-pr-fetch, so this script — and the status redraw depending on
+# it — never blocks on the network.
+#
+# Cache: ~/.cache/tmux-branch-pr/<owner>_<repo>_<branch>.json, one file per
+# repo+branch (a PR is per-branch, unlike the per-repo health cache). A missing
+# cache renders nothing and kicks off a fetch — deliberately no "loading"
+# placeholder, so a branch with no PR never flashes an empty PR row into
+# existence; the row appears only once a real PR is found. A present cache
+# renders immediately and refetches in the background when stale.
+set -eu
+
+CACHE_DIR="$HOME/.cache/tmux-branch-pr"
+OK_TTL=300      # seconds; re-check a resolved branch at most this often
+ERROR_TTL=900   # seconds; back off longer after an error
+
+command -v gh >/dev/null 2>&1 || {
+  tmux list-windows -a -F '#{window_id}' | while read -r wid; do
+    tmux set-window-option -t "$wid" @branch_pr ''
+  done
+  ~/.dotfiles/bin/tmux-status-rows 2>/dev/null || true
+  exit 0
+}
+
+# owner/repo for the git repo at $1, or nothing (nonzero exit) when $1 isn't in
+# a git repo, has no "origin", or the remote doesn't parse into a clean
+# owner/repo. Same rule as bin/tmux-repo-pr.
+resolve_repo() {
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  url=$(git -C "$1" remote get-url origin 2>/dev/null) || return 1
+  [ -n "$url" ] || return 1
+  repo=$(printf '%s' "$url" \
+    | sed -E 's#^[a-zA-Z]+://##; s#^[^@]*@##; s#^[^:/]+[:/]##; s#\.git$##')
+  case "$repo" in
+    */*) printf '%s\n' "$repo" ;;
+    *)   return 1 ;;
+  esac
+}
+
+# The current branch name at $1, or nothing (nonzero exit) on a detached HEAD —
+# a detached HEAD (mid-rebase, a checked-out tag/commit) is not a PR head, so
+# there's nothing to look up.
+resolve_branch() {
+  git -C "$1" symbolic-ref --quiet --short HEAD 2>/dev/null
+}
+
+now=$(date +%s)
+
+tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{pane_current_path}' |
+while read -r attached active wid path; do
+  [ "$attached" -gt 0 ] || continue
+  [ "$active" = "1" ] || continue
+
+  repo=$(resolve_repo "$path") || { tmux set-window-option -t "$wid" @branch_pr ''; continue; }
+  branch=$(resolve_branch "$path") || { tmux set-window-option -t "$wid" @branch_pr ''; continue; }
+  [ -n "$branch" ] || { tmux set-window-option -t "$wid" @branch_pr ''; continue; }
+
+  safe=$(printf '%s' "$repo/$branch" | tr '/' '_')
+  cache_file="$CACHE_DIR/$safe.json"
+
+  # Cold cache: show nothing (no flashed placeholder row) and fetch.
+  if [ ! -f "$cache_file" ]; then
+    tmux set-window-option -t "$wid" @branch_pr ''
+    nohup ~/.dotfiles/bin/tmux-branch-pr-fetch "$repo" "$branch" >/dev/null 2>&1 &
+    continue
+  fi
+
+  # review/checks_state can be an empty string (no decision yet / no checks); map
+  # "" to "-" so no field is blank — a blank field would collapse the
+  # space-joined positional split below and misalign every field after it.
+  line=$(jq -r '
+    [ (.status // "error"),
+      (.has // false),
+      (.number // 0),
+      (.commits // 0),
+      (.additions // 0),
+      (.deletions // 0),
+      (.changed // 0),
+      (.draft // false),
+      ((.review // "") | if . == "" then "-" else . end),
+      ((.checks_state // "") | if . == "" then "-" else . end),
+      (.checks_total // 0),
+      (.checks_skipped // 0),
+      (.checks_failed // 0),
+      (.checks_pending // 0),
+      (.unresolved // 0),
+      (.fetched_at // 0)
+    ] | map(tostring) | join(" ")' "$cache_file" 2>/dev/null) || line=''
+  if [ -n "$line" ]; then
+    # shellcheck disable=SC2086  # deliberate: split jq's space-joined fields into positional params
+    set -- $line
+    status=$1; has=$2; number=$3; commits=$4; additions=$5; deletions=$6; changed=$7
+    draft=$8; review=$9
+    shift 9
+    checks_state=$1; checks_total=$2; checks_skipped=$3; checks_failed=$4; checks_pending=$5; unresolved=$6; fetched_at=$7
+  else
+    status=error; has=false; number=0; commits=0; additions=0; deletions=0; changed=0
+    draft=false; review=-; checks_state=-; checks_total=0; checks_skipped=0
+    checks_failed=0; checks_pending=0; unresolved=0; fetched_at=0
+  fi
+
+  rendered=''
+  if [ "$status" = ok ] && [ "$has" = true ]; then
+    # Diff size: files changed, then colored +added / -deleted. "#" escaped as
+    # "##" so the E: re-expansion in status-format (see tmux.conf) yields a
+    # single literal "#" (e.g. "PR #42").
+    files_label=files
+    if [ "$changed" -eq 1 ]; then
+      # shellcheck disable=SC2209  # 'file' is a literal string here, not the file(1) command
+      files_label=file
+    fi
+    commits_label=commits
+    [ "$commits" -eq 1 ] && commits_label=commit
+    diff="#[fg=colour2]+$additions#[default] #[fg=colour1]-$deletions#[default]"
+    parts="PR ##$number · $commits $commits_label · $changed $files_label · $diff"
+
+    # Checks: GitHub's own merge-box wording, lowercased to match the bar's
+    # style. A null rollup / zero contexts is "no checks" (none configured or
+    # run); SKIPPED runs — which the rollup state folds into SUCCESS — are called
+    # out so an all-green row can't quietly hide that something never ran.
+    if [ "$checks_state" = '-' ] || [ "$checks_total" -eq 0 ]; then
+      checks_seg="#[fg=colour244]no checks#[default]"
+    else
+      case "$checks_state" in
+        SUCCESS)
+          if [ "$checks_skipped" -ge "$checks_total" ]; then
+            checks_seg="#[fg=colour244]all checks skipped#[default]"
+          elif [ "$checks_skipped" -gt 0 ]; then
+            checks_seg="#[fg=colour2]all checks have passed#[default] #[fg=colour244]($checks_skipped skipped)#[default]"
+          else
+            checks_seg="#[fg=colour2]all checks have passed#[default]"
+          fi
+          ;;
+        FAILURE|ERROR)
+          # Lead with the count of what failed; append how many are still
+          # running, if any, so a red row says both "N broke" and "M yet to
+          # report". Fall back to GitHub's phrasing if the bucket count is
+          # somehow zero (e.g. >100 contexts, past the fetch's page).
+          if [ "$checks_failed" -gt 0 ]; then
+            flabel=checks; [ "$checks_failed" -eq 1 ] && flabel=check
+            checks_seg="#[fg=colour1]$checks_failed $flabel failed#[default]"
+          else
+            checks_seg="#[fg=colour1]some checks were not successful#[default]"
+          fi
+          if [ "$checks_pending" -gt 0 ]; then
+            checks_seg="$checks_seg #[fg=colour3]· $checks_pending pending#[default]"
+          fi
+          ;;
+        PENDING|EXPECTED)
+          if [ "$checks_pending" -gt 0 ]; then
+            plabel=checks; [ "$checks_pending" -eq 1 ] && plabel=check
+            checks_seg="#[fg=colour3]$checks_pending $plabel pending#[default]"
+          else
+            checks_seg="#[fg=colour3]some checks haven't completed yet#[default]"
+          fi
+          ;;
+        *)                checks_seg="#[fg=colour244]no checks#[default]" ;;
+      esac
+    fi
+    parts="$parts · $checks_seg"
+
+    # Review state. A draft PR isn't up for review yet, so "draft" replaces the
+    # review decision rather than sitting alongside it. REVIEW_REQUIRED (nobody
+    # has weighed in) is omitted as noise — only approved / changes-requested,
+    # the states that actually change what you'd do next, get a segment.
+    if [ "$draft" = true ]; then
+      parts="$parts · #[fg=colour244]draft#[default]"
+    else
+      case "$review" in
+        APPROVED)          parts="$parts · #[fg=colour2]approved#[default]" ;;
+        CHANGES_REQUESTED) parts="$parts · #[fg=colour1]changes requested#[default]" ;;
+        *)                 : ;;
+      esac
+    fi
+
+    # Unresolved review conversations: a yellow nudge, omitted at zero.
+    if [ "$unresolved" -gt 0 ]; then
+      unres_label=unresolved
+      parts="$parts · #[fg=colour3]$unresolved $unres_label#[default]"
+    fi
+
+    rendered=$parts
+  fi
+
+  tmux set-window-option -t "$wid" @branch_pr "$rendered"
+
+  age=$(( now - fetched_at ))
+  if [ "$status" = ok ]; then ttl=$OK_TTL; else ttl=$ERROR_TTL; fi
+  if [ "$age" -gt "$ttl" ]; then
+    nohup ~/.dotfiles/bin/tmux-branch-pr-fetch "$repo" "$branch" >/dev/null 2>&1 &
+  fi
+done
+
+# Size the bar to whether the now-updated @branch_pr (and @repo_pr) give their
+# rows anything to show, then repaint so the change lands immediately, not on
+# the next status-interval tick.
+~/.dotfiles/bin/tmux-status-rows 2>/dev/null || true
+tmux refresh-client -S 2>/dev/null

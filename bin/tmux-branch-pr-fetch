@@ -1,0 +1,155 @@
+#!/bin/sh
+# One-shot, read-only fetch of the OPEN pull request whose head is <branch> in
+# <owner/repo> — the "open work" the window in front of you is producing —
+# capturing everything the branch's PR row shows: number, diff size (files
+# changed, additions, deletions), the CI/checks rollup, the review decision /
+# draft state, and the count of unresolved review conversations. Run detached
+# and lock-guarded (per repo+branch) so duplicate hooks firing for the same
+# window can't launch concurrent `gh` calls.
+#
+# Companion to bin/tmux-repo-pr-fetch, which is REPO-wide health (how many PRs
+# are open across the whole repo, vulnerability alerts); this one is
+# BRANCH-scoped and answers "what's the state of the PR for the branch I'm on".
+# The two are independent axes and render on their own status rows.
+#
+# A single `gh api graphql` call gets every field. GraphQL (not REST /
+# `gh pr list`) is required for the unresolved-conversation count
+# (reviewThreads.isResolved), which the REST JSON doesn't expose; fetching the
+# rest of the fields in the same query keeps it to one round trip.
+#
+# Only OPEN PRs are queried: a merged or closed PR should vanish from the bar —
+# this is open-work visibility, not history. When the branch has no open PR the
+# cache records has=false and the renderer shows nothing (no row).
+#
+# Usage: tmux-branch-pr-fetch <owner/repo> <branch>
+set -eu
+
+# shellcheck source=./tmux-locklib
+. "$HOME/.dotfiles/bin/tmux-locklib"
+
+repo=$1
+branch=$2
+owner=${repo%%/*}
+name=${repo#*/}
+safe=$(printf '%s' "$repo/$branch" | tr '/' '_')
+cache_dir="$HOME/.cache/tmux-branch-pr"
+cache_file="$cache_dir/$safe.json"
+lock_dir="/tmp/tmux-branch-pr-fetch-$safe.lock"
+
+mkdir -p "$cache_dir"
+
+# A fetch for this exact repo+branch is already in flight — don't duplicate the
+# network call; whichever run holds the lock writes the cache for both.
+lock_acquire "$lock_dir" || exit 0
+trap 'rm -rf "$lock_dir"' EXIT
+
+now=$(date +%s)
+
+# reviewThreads is capped at 100 (a PR with more unresolved conversations than
+# that is well past "glanceable"); commits(last:1) carries the head commit's
+# statusCheckRollup, which merges legacy commit statuses and check runs exactly
+# as GitHub's own "checks" summary does. The rollup's own `state` gives the
+# overall pass/fail/pending, but the individual `contexts` are needed to tell
+# "no checks configured" (a null rollup / zero contexts) from a real result and
+# to count SKIPPED checks — neither of which the rollup state alone distinguishes.
+# shellcheck disable=SC2016 # single-quoted on purpose: $owner/$name/$branch are GraphQL variables, not shell ones — they must reach gh literally
+query='query($owner:String!,$name:String!,$branch:String!){
+  repository(owner:$owner,name:$name){
+    pullRequests(headRefName:$branch, states:OPEN, first:20, orderBy:{field:CREATED_AT, direction:DESC}){
+      nodes{
+        number additions deletions changedFiles isDraft reviewDecision isCrossRepository
+        reviewThreads(first:100){ nodes{ isResolved } }
+        commits(last:1){ totalCount nodes{ commit{ statusCheckRollup{
+          state
+          contexts(first:100){
+            totalCount
+            nodes{
+              __typename
+              ... on CheckRun { conclusion status }
+              ... on StatusContext { state }
+            }
+          }
+        } } } }
+      }
+    }
+  }
+}'
+
+# The assignment is the `if` condition (not $? afterward) so a non-zero exit —
+# an expected case (no access, rate limit, network down), not a bug — doesn't
+# trip `set -e`.
+if raw=$(gh api graphql -f query="$query" -f owner="$owner" -f name="$name" -f branch="$branch" 2>/dev/null); then
+  status=ok
+else
+  status=error
+  raw='{}'
+fi
+
+# Flatten to a single record. has=false covers both "errored" and "no open PR
+# for this branch"; the renderer treats either as nothing-to-show.
+#
+# headRefName alone matches ANY open PR into this repo whose head branch shares
+# the name — including one opened from a fork (isCrossRepository), most plausibly
+# when you sit on main/master and a contributor's fork PR uses the same branch
+# name. Those aren't the PR for YOUR local branch, so drop cross-repository PRs
+# and take the newest of what remains (the query is CREATED_AT-desc); if only
+# fork PRs matched, $pr is null and the branch correctly shows no PR.
+json=$(printf '%s' "$raw" | jq -c --arg status "$status" --argjson now "$now" '
+  ([ .data.repository.pullRequests.nodes[]? | select(.isCrossRepository == false) ][0]) as $pr |
+  if $status != "ok" then
+    {status:"error", fetched_at:$now, has:false}
+  elif $pr == null then
+    {status:"ok", fetched_at:$now, has:false}
+  else
+    ($pr.commits.nodes[0].commit.statusCheckRollup) as $roll |
+    # Bucket each check context so the renderer can show counts. A CheckRun
+    # carries a status (is it done?) and, once done, a conclusion; a legacy
+    # StatusContext carries only a state. NEUTRAL counts as passed (non-blocking),
+    # SKIPPED is its own bucket (the rollup state folds it into SUCCESS), and
+    # anything else finished — FAILURE, TIMED_OUT, CANCELLED, ERROR, … — is failed.
+    ([ $roll.contexts.nodes[]? |
+       if .__typename == "CheckRun" then
+         if (.status // "") != "COMPLETED" then "pending"
+         else ((.conclusion // "") |
+           if . == "SUCCESS" or . == "NEUTRAL" then "passed"
+           elif . == "SKIPPED" then "skipped"
+           elif . == "" then "pending"
+           else "failed" end)
+         end
+       elif .__typename == "StatusContext" then
+         ((.state // "") |
+           if . == "SUCCESS" then "passed"
+           elif . == "PENDING" or . == "EXPECTED" then "pending"
+           else "failed" end)
+       else "pending" end
+     ]) as $cats |
+    {
+      status:"ok", fetched_at:$now, has:true,
+      number:      $pr.number,
+      commits:     ($pr.commits.totalCount // 0),
+      additions:   $pr.additions,
+      deletions:   $pr.deletions,
+      changed:     $pr.changedFiles,
+      draft:       $pr.isDraft,
+      review:      ($pr.reviewDecision // ""),
+      unresolved:  ([ $pr.reviewThreads.nodes[] | select(.isResolved == false) ] | length),
+      # checks_state is "" when the head commit has no rollup at all (no checks
+      # configured); otherwise the overall rollup state, which the renderer uses
+      # to pick pass/fail/pending. checks_total distinguishes "no checks" from a
+      # real result; the per-bucket counts (from the first 100 contexts) give the
+      # renderer the numbers to show — how many failed, are still running, or
+      # were skipped.
+      checks_state:   ($roll.state // ""),
+      checks_total:   ($roll.contexts.totalCount // 0),
+      checks_passed:  ([ $cats[] | select(. == "passed") ]  | length),
+      checks_failed:  ([ $cats[] | select(. == "failed") ]  | length),
+      checks_pending: ([ $cats[] | select(. == "pending") ] | length),
+      checks_skipped: ([ $cats[] | select(. == "skipped") ] | length)
+    }
+  end
+') || json=$(printf '{"status":"error","fetched_at":%s,"has":false}' "$now")
+
+tmp="$cache_file.$$"
+printf '%s\n' "$json" > "$tmp" && mv -f "$tmp" "$cache_file"
+
+~/.dotfiles/bin/tmux-branch-pr

@@ -1,0 +1,49 @@
+#!/bin/sh
+# Sizes the status bar to what's actually on it, so there's never an empty
+# trailing row. Two independent content rows can appear or disappear:
+#   @branch_pr — the active window's branch PR status (status-format[2] when
+#                present); see bin/tmux-branch-pr
+#   @repo_pr   — the active repo's PR/vulnerability health; see bin/tmux-repo-pr
+# The separator (status-format[0]) and the name+branch row (status-format[1])
+# always show. So the bar is:
+#   2 rows — neither content row has anything
+#   3 rows — exactly one of them does
+#   4 rows — both do
+# The PR row sits above the health row; when there's no PR row, the health row
+# slides up into status-format[2]. That row-slot juggling is done by the
+# #{?@branch_pr,...} conditionals in tmux.conf's status-format; here we only set
+# the height.
+#
+# Global, matching the rest of the status-height handling (the startup default
+# and the pane-mode-changed hook all use `set -g status`): the one global bar
+# is sized for the most-recently-active client, which in the normal
+# single-client case is simply "the bar you're looking at". The tree-mode "off"
+# state is owned by the pane-mode-changed hook (choose-tree zooms full-screen);
+# this bails out then rather than fighting it back on.
+#
+# Driven by every event that changes @branch_pr / @repo_pr or which window is
+# active: called from the tail of bin/tmux-branch-pr and bin/tmux-repo-pr (which
+# themselves run on window/pane switches, new windows, and the background
+# tickers) and from pane-mode-changed when leaving a mode.
+set -eu
+
+# The most-recently-active attached client is the one the single global bar is
+# drawn for; sort by client_activity (a timestamp) descending. No client
+# attached -> nothing to size.
+client=$(tmux list-clients -F '#{client_activity} #{client_name}' 2>/dev/null \
+  | sort -rn | head -1 | cut -d' ' -f2-)
+[ -n "$client" ] || exit 0
+
+# -c evaluates the formats against that client's current window/active pane, so
+# @branch_pr / @repo_pr (window options) and pane_mode (a pane property) all
+# refer to what the bar is showing.
+mode=$(tmux display-message -p -c "$client" '#{pane_mode}' 2>/dev/null) || exit 0
+[ "$mode" = tree-mode ] && exit 0
+
+branch_pr=$(tmux display-message -p -c "$client" '#{@branch_pr}' 2>/dev/null) || exit 0
+repo_pr=$(tmux display-message -p -c "$client" '#{@repo_pr}' 2>/dev/null) || exit 0
+
+rows=2
+[ -n "$branch_pr" ] && rows=$(( rows + 1 ))
+[ -n "$repo_pr" ] && rows=$(( rows + 1 ))
+tmux set -g status "$rows"

@@ -1,0 +1,22 @@
+#!/bin/sh
+# Background ticker that re-stamps every window's @git_branch on a fixed
+# interval, so a `git checkout` made in a window you then stay in shows its new
+# branch even though no window event (new/rename/select) fired to re-run
+# bin/tmux-git-branch-windows. Navigating between windows updates instantly via
+# the hooks; this only backstops the "sat still and switched branch" case, so a
+# coarse interval is plenty. Single-instance guarded: safe to call on every
+# config reload.
+
+PIDFILE=/tmp/tmux-git-branch-watch.pid
+INTERVAL=30
+
+# Reuse the running ticker if it is still alive.
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  exit 0
+fi
+
+nohup sh -c \
+  'while :; do ~/.dotfiles/bin/tmux-git-branch-windows; sleep '"$INTERVAL"'; done' \
+  >/dev/null 2>&1 &
+
+echo $! > "$PIDFILE"

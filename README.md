@@ -171,13 +171,84 @@ the bars decay even when idle. The bar is decorative only — like a leading mar
 emoji, it is not part of the window name, so it never affects window sorting or
 coloring.
 
-`status-left` shows open PR and Dependabot-vulnerability counts for whichever
-repo the currently active pane is in, e.g.:
+Each window-list entry also shows its git **branch** in dim parentheses after the
+name, so a repo window reads `codeshots (main)` while a plain-directory window
+stays `codeshots`. `bin/tmux-git-branch` resolves the label for a directory
+(the current branch, or the short commit hash on a detached HEAD, or nothing
+outside a work tree); `bin/tmux-git-branch-windows` stamps every window's
+`@git_branch` from its active pane's path, refreshed on window
+create/rename/select and by `bin/tmux-git-branch-watch` on a timer — the timer
+is what catches a `git checkout` made in a window you then sit still in. Like
+the freshness bar, the label is rendered at display time and is **not** part of
+the window name, so it never affects sorting or coloring. The same
+`@git_branch` also drives the active window's name row on the status bar (see
+below), so a repo with no remote — where the PR/vulnerability line is empty —
+still gets its `(branch)` there.
+
+The status bar carries the active window's identity, the open PR for its
+branch, and repo-wide health on up to four stacked rows (below the horizontal
+rule):
+
+1. **Name + branch** (`status-format[1]`, from `window_name` + `@git_branch`) —
+   always present; the window name plus, in a git repo, its branch.
+2. **Branch PR** (`status-format[2]`, from `@branch_pr`) — the open pull request
+   whose head *is* the current branch, if one exists: its number, commit count,
+   diff size, checks, review state, and unresolved conversations. This is "open work"
+   visibility — the state of the PR the window in front of you is producing.
+3. **Repo health** (`@repo_pr`, from `status-left`) — that repo's open-PR and
+   Dependabot-vulnerability *counts* across the whole repo, kept off the name so
+   it doesn't crowd it.
+
+The branch-PR and health rows are independent axes and each shows only when it
+has something; the branch-PR row sits above the health row, so when there's no
+PR the health row slides up. For whichever repo the active pane is in, e.g.:
 
 ```
-dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+dotfiles (feat/foo)
+PR #42 · 12 commits · 3 files · +120 -30 · all checks have passed · approved · 2 unresolved
+3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 ```
 
+`bin/tmux-status-rows` sizes the bar to exactly what's on it — two rows (rule +
+name) when neither content row has anything, three when one does, four when
+both — rather than leaving an empty trailing line. It's called from the tail of
+`bin/tmux-branch-pr` and `bin/tmux-repo-pr` (so it re-evaluates on every
+window/pane switch and cache update) and from the `pane-mode-changed` hook when
+leaving a mode; while a pane is in tree-mode (`prefix w`, zoomed full-screen)
+the bar is hidden entirely.
+
+The **branch-PR row** is rendered by `bin/tmux-branch-pr` (the renderer,
+triggered on window/pane switches, branch change, and a background ticker) and
+`bin/tmux-branch-pr-fetch` (the only thing that touches the network — a single
+read-only `gh api graphql` call; GraphQL rather than `gh pr list` because the
+unresolved-conversation count isn't in the REST fields, and fetching everything
+in one query keeps it to one round trip). Only **open** PRs are queried — a
+merged or closed PR vanishes, since this is open-work visibility, not history —
+and a PR opened from a **fork** that happens to share your branch name is
+skipped (only a same-repo head counts as "the PR for this branch"), so a
+contributor's fork PR can't be mis-attributed to your window.
+Its segments: a pluralized **commit count** (`12 commits` / `1 commit`) and diff
+size (files changed, then colored `+added` (`colour2`, green) / `-deleted`
+(`colour1`, red)) size up the PR at a glance; **checks** roll up `statusCheckRollup`
+(GitHub's own merge of commit statuses and check runs), bucketing the
+individual contexts so the numbers that matter are visible: a green `all checks
+have passed`, a red `N checks failed` (with a yellow `· M pending` appended when
+some are still running), or a yellow `N checks pending`. A head commit with no
+checks at all shows a dim `no checks` (so "none configured" is visible rather
+than silently absent), and SKIPPED runs — which the rollup state folds into a
+pass — are called out as a dim `(N skipped)` alongside the green pass (or `all
+checks skipped` when nothing actually ran), so an all-green row can't hide that
+a check never executed. **review** shows a green `approved`, red `changes
+requested`, or a dim `draft`
+(a draft PR isn't up for review, so `draft` replaces the decision) — a
+not-yet-reviewed PR shows nothing there; **unresolved** is a yellow count of
+open review conversations, omitted at zero. Cached per repo+branch under
+`~/.cache/tmux-branch-pr/`; a branch seen for the first time shows nothing (no
+flashed placeholder row) until its fetch lands.
+
+The **health row** only exists when there's something to put on it: for a
+non-repo window, a repo with no remote, or one whose PR/vulnerability data isn't
+readable, it's absent rather than blank. It's rendered
 via `bin/tmux-repo-pr` (the renderer, triggered on window/pane switches and a
 background ticker) and `bin/tmux-repo-pr-fetch` (the only thing that touches
 the network — two read-only `gh api` calls, no mutating calls of any kind).
@@ -247,7 +318,7 @@ On first shell/editor start, plugins install themselves automatically:
 - `npm install -g ccusage` — Claude Code token/cost tracker; bound to `prefix u` in tmux, opening a monthly usage report (per-model breakdown) in a floating popup.
 - `brew install git-delta` — syntax-highlighted, line-level diffs for `git diff`/`git log`/`git show`; falls back to git's plain output if not installed.
 - `brew install bat` — colorized `cat`/man-page replacement; also powers the preview pane in fzf's Ctrl-T file picker.
-- [`gh`](https://cli.github.com) + `gh auth login` (and `jq`) — power the per-repo open-PR and Dependabot-vulnerability counts in `status-left` (see above); read-only, degrades to nothing without either.
+- [`gh`](https://cli.github.com) + `gh auth login` (and `jq`) — power the branch PR row (number, diff size, checks, review, unresolved conversations) and the per-repo open-PR and Dependabot-vulnerability counts on the status bar (see above); read-only, degrades to nothing without either.
 
 ## Contents
 

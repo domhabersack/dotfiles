@@ -1,7 +1,12 @@
 name: bats
 
 on:
+  # Only the default branch on push; PR branches are covered by the
+  # pull_request trigger below, so a push to a branch with an open PR doesn't
+  # run this workflow twice.
   push:
+    branches:
+      - main
     paths:
       - "bin/**"
       - ".github/workflows/bats.yml"

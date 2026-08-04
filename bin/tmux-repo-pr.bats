@@ -122,7 +122,7 @@ write_cache() {
   git -C "$BATS_TEST_TMPDIR/https-repo" remote add origin https://github.com/example-owner/example-repo.git
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ "$(captured_for '@1')" = "$(printf '#[fg=colour238]example-repo #[fg=colour4]…#[default]')" ]
+  [ "$(captured_for '@1')" = "$(printf '#[fg=colour4]…#[default]')" ]
 }
 
 @test "parses an ssh-shorthand origin the same way as https" {
@@ -131,7 +131,7 @@ write_cache() {
   git -C "$BATS_TEST_TMPDIR/ssh-repo" remote add origin git@github.com:example-owner/example-repo.git
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ "$(captured_for '@1')" = "$(printf '#[fg=colour238]example-repo #[fg=colour4]…#[default]')" ]
+  [ "$(captured_for '@1')" = "$(printf '#[fg=colour4]…#[default]')" ]
 }
 
 @test "renders colored human/bot split only when both sides are non-zero" {
@@ -141,7 +141,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 3 2 1 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]3 PRs#[nobold] (#[fg=colour6]2#[default] human, #[fg=colour6]1#[default] bot) · no known vulnerabilities')
+  expected=$(printf '#[bold]3 PRs#[nobold] (#[fg=colour6]2#[default] human, #[fg=colour6]1#[default] bot) · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -152,7 +152,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 1 1 0 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]1 PR#[nobold] (all human) · no known vulnerabilities')
+  expected=$(printf '#[bold]1 PR#[nobold] (all human) · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -163,7 +163,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 2 0 2 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]2 PRs#[nobold] (all bot) · no known vulnerabilities')
+  expected=$(printf '#[bold]2 PRs#[nobold] (all bot) · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -174,7 +174,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 0 0 0 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · no PRs · no known vulnerabilities')
+  expected=$(printf 'no PRs · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -185,7 +185,7 @@ write_cache() {
   write_cache example-owner/example-repo error 0 0 0 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · no known vulnerabilities')
+  expected=$(printf 'no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -196,7 +196,7 @@ write_cache() {
   write_cache example-owner/example-repo error 0 0 0 ok 3 2 1
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[bold]3 vulnerabilities#[nobold] (#[fg=colour196]2 critical#[default], #[fg=colour208]1 high#[default])')
+  expected=$(printf '#[bold]3 vulnerabilities#[nobold] (#[fg=colour196]2 critical#[default], #[fg=colour208]1 high#[default])')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -207,7 +207,7 @@ write_cache() {
   write_cache example-owner/example-repo error 0 0 0 disabled 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[fg=colour238]example-repo#[default] · #[fg=colour214]dependabot not enabled#[default]')
+  expected=$(printf '#[fg=colour214]dependabot not enabled#[default]')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 

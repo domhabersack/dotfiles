@@ -1,8 +1,10 @@
 #!/bin/sh
 # Renders each attached session's active window's repo health into that
-# window's @repo_pr option, read by status-left:
-#   dotfiles 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
-#   dotfiles no PRs · no known vulnerabilities
+# window's @repo_pr option, shown on the bottom status row (status-format[2]):
+#   3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+#   no PRs · no known vulnerabilities
+# The repo name and branch are NOT included here — they render on the row above
+# (status-format[1], from window_name + @git_branch), so this stays health-only.
 #
 # Mirrors ~/Developer/mission-status's line format and severity color scheme
 # (see bin/tmux-repo-pr-fetch for the exact classification/dedup rules),
@@ -32,6 +34,8 @@ command -v gh >/dev/null 2>&1 || {
   tmux list-windows -a -F '#{window_id}' | while read -r wid; do
     tmux set-window-option -t "$wid" @repo_pr ''
   done
+  # Every @repo_pr is now empty, so the bottom row is always blank — drop to 2.
+  ~/.dotfiles/bin/tmux-status-rows 2>/dev/null || true
   exit 0
 }
 
@@ -68,10 +72,13 @@ while read -r attached active wid path; do
   repo=$(resolve_repo "$path") || { tmux set-window-option -t "$wid" @repo_pr ''; continue; }
   safe=$(printf '%s' "$repo" | tr '/' '_')
   cache_file="$CACHE_DIR/$safe.json"
-  short=${repo##*/}
 
+  # @repo_pr holds ONLY the PR/vulnerability health, rendered on its own status
+  # row (status-format[2]); the repo name and branch sit on the row above it
+  # (status-format[1], sourced from window_name + @git_branch), so nothing here
+  # repeats them.
   if [ ! -f "$cache_file" ]; then
-    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour238]$short #[fg=colour4]…#[default]"
+    tmux set-window-option -t "$wid" @repo_pr "#[fg=colour4]…#[default]"
     nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
     continue
   fi
@@ -141,12 +148,10 @@ while read -r attached active wid path; do
     vuln_part='#[fg=colour214]dependabot not enabled#[default]'
   fi
 
-  data="${pr_part}${pr_part:+${vuln_part:+ · }}${vuln_part}"
-  if [ -n "$data" ]; then
-    rendered="#[fg=colour238]$short#[default] · $data"
-  else
-    rendered=''
-  fi
+  # Just the health, no name/branch prefix (those live on the row above). Empty
+  # when both halves errored — commonly a repo this account can't read PRs/alerts
+  # on — leaving the bottom row blank while the name+branch row above still shows.
+  rendered="${pr_part}${pr_part:+${vuln_part:+ · }}${vuln_part}"
   tmux set-window-option -t "$wid" @repo_pr "$rendered"
 
   age=$(( now - fetched_at ))
@@ -156,6 +161,9 @@ while read -r attached active wid path; do
   fi
 done
 
-# Repaint the status line so a freshly-set @repo_pr shows immediately, not
-# just on the next status-interval tick.
+# Size the bar to whether the now-updated @repo_pr gives the bottom row
+# anything to show (2 vs 3 rows), then repaint so both the freshly-set @repo_pr
+# and any height change show immediately, not just on the next status-interval
+# tick.
+~/.dotfiles/bin/tmux-status-rows 2>/dev/null || true
 tmux refresh-client -S 2>/dev/null
