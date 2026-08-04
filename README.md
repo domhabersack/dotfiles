@@ -223,7 +223,10 @@ triggered on window/pane switches, branch change, and a background ticker) and
 read-only `gh api graphql` call; GraphQL rather than `gh pr list` because the
 unresolved-conversation count isn't in the REST fields, and fetching everything
 in one query keeps it to one round trip). Only **open** PRs are queried — a
-merged or closed PR vanishes, since this is open-work visibility, not history.
+merged or closed PR vanishes, since this is open-work visibility, not history —
+and a PR opened from a **fork** that happens to share your branch name is
+skipped (only a same-repo head counts as "the PR for this branch"), so a
+contributor's fork PR can't be mis-attributed to your window.
 Its segments: diff size shows files changed and colored `+added` (`colour2`,
 green) / `-deleted` (`colour1`, red); **checks** roll up `statusCheckRollup`
 (GitHub's own merge of commit statuses and check runs), bucketing the

@@ -55,9 +55,9 @@ now=$(date +%s)
 # shellcheck disable=SC2016 # single-quoted on purpose: $owner/$name/$branch are GraphQL variables, not shell ones — they must reach gh literally
 query='query($owner:String!,$name:String!,$branch:String!){
   repository(owner:$owner,name:$name){
-    pullRequests(headRefName:$branch, states:OPEN, first:1, orderBy:{field:CREATED_AT, direction:DESC}){
+    pullRequests(headRefName:$branch, states:OPEN, first:20, orderBy:{field:CREATED_AT, direction:DESC}){
       nodes{
-        number additions deletions changedFiles isDraft reviewDecision
+        number additions deletions changedFiles isDraft reviewDecision isCrossRepository
         reviewThreads(first:100){ nodes{ isResolved } }
         commits(last:1){ nodes{ commit{ statusCheckRollup{
           state
@@ -87,8 +87,15 @@ fi
 
 # Flatten to a single record. has=false covers both "errored" and "no open PR
 # for this branch"; the renderer treats either as nothing-to-show.
+#
+# headRefName alone matches ANY open PR into this repo whose head branch shares
+# the name — including one opened from a fork (isCrossRepository), most plausibly
+# when you sit on main/master and a contributor's fork PR uses the same branch
+# name. Those aren't the PR for YOUR local branch, so drop cross-repository PRs
+# and take the newest of what remains (the query is CREATED_AT-desc); if only
+# fork PRs matched, $pr is null and the branch correctly shows no PR.
 json=$(printf '%s' "$raw" | jq -c --arg status "$status" --argjson now "$now" '
-  (.data.repository.pullRequests.nodes[0]) as $pr |
+  ([ .data.repository.pullRequests.nodes[]? | select(.isCrossRepository == false) ][0]) as $pr |
   if $status != "ok" then
     {status:"error", fetched_at:$now, has:false}
   elif $pr == null then
