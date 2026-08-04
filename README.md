@@ -171,19 +171,24 @@ the bars decay even when idle. The bar is decorative only — like a leading mar
 emoji, it is not part of the window name, so it never affects window sorting or
 coloring.
 
-Each window-list entry also shows its git **branch** in dim parentheses after the
-name, so a repo window reads `codeshots (main)` while a plain-directory window
-stays `codeshots`. `bin/tmux-git-branch` resolves the label for a directory
-(the current branch, or the short commit hash on a detached HEAD, or nothing
-outside a work tree); `bin/tmux-git-branch-windows` stamps every window's
-`@git_branch` from its active pane's path, refreshed on window
-create/rename/select and by `bin/tmux-git-branch-watch` on a timer — the timer
-is what catches a `git checkout` made in a window you then sit still in. Like
-the freshness bar, the label is rendered at display time and is **not** part of
-the window name, so it never affects sorting or coloring. The same
-`@git_branch` also drives the active window's name row on the status bar (see
-below), so a repo with no remote — where the PR/vulnerability line is empty —
-still gets its `(branch)` there.
+Each window-list entry also shows its git **branch** in dim parentheses after
+the name — but only when it's *not* `main`, so a window parked on a feature
+branch reads `codeshots (feat/foo)` and stands out, while a window on the trunk
+stays a plain `codeshots` (as does a plain-directory window). The trunk is the
+default, so labelling it on every window is noise; hiding it makes the windows
+doing feature work the ones that draw the eye. `bin/tmux-git-branch` resolves
+the label for a directory (the current branch, or the short commit hash on a
+detached HEAD, or nothing outside a work tree); `bin/tmux-git-branch-windows`
+stamps every window's `@git_branch` from its active pane's path, refreshed on
+window create/rename/select and by `bin/tmux-git-branch-watch` on a timer — the
+timer is what catches a `git checkout` made in a window you then sit still in.
+Like the freshness bar, the label is rendered at display time and is **not**
+part of the window name, so it never affects sorting or coloring. The `(main)`
+suppression is scoped to this choose-tree format only: the same `@git_branch`
+also drives the active window's name row on the status bar (see below), which
+still shows the branch **including** `main` — so "which branch is main on" is
+always a glance away, and a repo with no remote (where the PR/vulnerability line
+is empty) still gets its `(branch)` there.
 
 The status bar carries the active window's identity, the open PR for its
 branch, and repo-wide health on up to four stacked rows (below the horizontal
