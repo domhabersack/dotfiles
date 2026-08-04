@@ -7,8 +7,59 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 # --since caps the report at (up to) the last six months; --since just
-# filters, so a vault with less history than that renders exactly what
-# exists, no error. No --breakdown here -- the per-model split lives in the
-# companion prefix+U popup (bin/tmux-ccusage-models-popup) instead, so this
-# view stays a single, uncluttered monthly-totals table.
-ccusage claude monthly --since "$(date -v-6m -v1d +%Y%m%d)"
+# filters, so a history shorter than that renders exactly what exists, no
+# error. No --breakdown here -- the per-model split lives in the companion
+# prefix+y popup (bin/tmux-ccusage-models-popup) instead, so this view
+# stays a single, uncluttered monthly-totals table.
+#
+# ccusage's own table renderer has no per-column suppression flag, so this
+# builds the table from --json instead, specifically to drop the Cache
+# Create / Cache Read columns -- Total Tokens and Cost still reflect true
+# totals (which do include cache tokens; that's real spend), only the
+# breakdown of how much of that total came from the cache is hidden.
+json=$(ccusage claude monthly --json --offline --since "$(date -v-6m -v1d +%Y%m%d)")
+
+printf '%s\n' "$json" | jq -r '
+  (.monthly[] | [.month, (.modelsUsed | join(", ")), .inputTokens, .outputTokens, .totalTokens, .totalCost] | @tsv),
+  (["TOTAL", "", .totals.inputTokens, .totals.outputTokens, .totals.totalTokens, .totals.totalCost] | @tsv)
+' | awk -F'\t' '
+  # Trailing params after the blank are the awk idiom for locals -- awk
+  # has no local-variable declarations, so any bare variable is global by
+  # default. Without this, the internal i/len/neg/out/remaining here would
+  # clobber the identically-named i in the printing loop below that calls
+  # this, corrupting that loop counter after the first row.
+  function commafmt(n,   i, len, neg, out, remaining) {
+    n = sprintf("%.0f", n)
+    neg = ""
+    if (n ~ /^-/) { neg = "-"; sub(/^-/, "", n) }
+    out = ""
+    len = length(n)
+    for (i = 1; i <= len; i++) {
+      out = out substr(n, i, 1)
+      remaining = len - i
+      if (remaining > 0 && remaining % 3 == 0) out = out ","
+    }
+    return neg out
+  }
+  {
+    month[NR] = $1; models[NR] = $2; input[NR] = $3 + 0; output[NR] = $4 + 0; total[NR] = $5 + 0; cost[NR] = $6 + 0; n = NR
+    if (length($1) > mw) mw = length($1)
+    if (length($2) > modw) modw = length($2)
+  }
+  END {
+    if (mw < 5) mw = 5
+    hdrm = "Month"; while (length(hdrm) < mw) hdrm = hdrm " "
+    hdrmodels = "Models"; while (length(hdrmodels) < modw) hdrmodels = hdrmodels " "
+    headerline = sprintf("  %s  %s  %12s  %12s  %14s  %12s", hdrm, hdrmodels, "Input", "Output", "Total Tokens", "Cost (USD)")
+    print headerline
+    for (i = 1; i <= n; i++) {
+      padm = month[i]; while (length(padm) < mw) padm = padm " "
+      padmodels = models[i]; while (length(padmodels) < modw) padmodels = padmodels " "
+      if (month[i] == "TOTAL") {
+        sep = ""; for (j = 0; j < length(headerline) - 2; j++) sep = sep "-"
+        print "  " sep
+      }
+      printf "  %s  %s  %12s  %12s  %14s  $%11.2f\n", padm, padmodels, commafmt(input[i]), commafmt(output[i]), commafmt(total[i]), cost[i]
+    }
+  }
+'
