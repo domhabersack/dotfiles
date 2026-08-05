@@ -68,6 +68,15 @@ program emitting an actual bell character — for Claude Code, set
 `"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
 Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
+The same bells also drive a **notification indicator** on the right of the
+status bar, so you can tell another window wants attention *without* opening
+choose-tree: `bin/tmux-notify-windows` lists the current session's windows that
+have a pending bell as `🔔 codeshots · api` (empty when none), writing it into
+that session's `status-right`. It's per-session, updates the moment a bell
+arrives (the `alert-bell` hook, not just the status-interval tick), and clears
+a window from the list as soon as you visit it — the same `window_bell_flag`
+signal behind the 🔔 in the window list above.
+
 Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf`) can show
 your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each
 session row via `bin/tmux-usage-statusline`. That script only reads
