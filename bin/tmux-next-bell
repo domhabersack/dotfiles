@@ -1,0 +1,36 @@
+#!/bin/sh
+# Jump to the next window in the current session that has a pending bell
+# (window_bell_flag) — the same signal shown as "🔔 name" in status-right (see
+# bin/tmux-notify-windows) and as the 🔔 in the choose-tree window list (e.g.
+# Claude Code waiting for input). Windows are visited in ascending index order,
+# wrapping around, so repeated presses cycle through every window wanting
+# attention; visiting a window clears its bell. Bound to prefix+b in tmux.conf
+# (repeatable). Shows a brief message and stays put when nothing has a bell.
+set -eu
+
+sess=$(tmux display-message -p '#{session_name}')
+cur=$(tmux display-message -p '#{window_index}')
+
+# Ascending window indices of this session's windows with a pending bell.
+# list-windows is ordered by index, and the flag (0/1) never contains spaces.
+bells=$(tmux list-windows -t "$sess" -F '#{window_bell_flag} #{window_index}' 2>/dev/null |
+  while IFS=' ' read -r flag idx; do
+    if [ "$flag" = 1 ]; then printf '%s\n' "$idx"; fi
+  done)
+
+if [ -z "$bells" ]; then
+  tmux display-message 'No windows with a pending notification.'
+  exit 0
+fi
+
+# The first bell index past the current window; if none is past it (the current
+# window is at or beyond the last bell), wrap to the lowest bell index.
+target=$(printf '%s\n' "$bells" |
+  while IFS= read -r idx; do
+    if [ "$idx" -gt "$cur" ]; then printf '%s\n' "$idx"; break; fi
+  done)
+if [ -z "$target" ]; then
+  target=$(printf '%s\n' "$bells" | head -1)
+fi
+
+tmux select-window -t "$sess:$target"
