@@ -4,7 +4,7 @@
 # bin/tmux-notify-windows) and as the 🔔 in the choose-tree window list (e.g.
 # Claude Code waiting for input). Windows are visited in ascending index order,
 # wrapping around, so repeated presses cycle through every window wanting
-# attention; visiting a window clears its bell. Bound to prefix+b in tmux.conf
+# attention; visiting a window clears its bell. Bound to prefix+n in tmux.conf
 # (repeatable). Shows a brief message and stays put when nothing has a bell.
 set -eu
 
