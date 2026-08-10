@@ -1,0 +1,61 @@
+#!/bin/sh
+# One line per custom tmux shortcut this dotfiles repo defines on top of
+# tmux's own defaults -- key and a short description -- with " (unavailable)"
+# appended (dimmed the same light gray tmux uses for secondary status-line
+# info, colour244; see status-fg in tmux.conf) for any shortcut whose binding
+# doesn't currently exist, e.g. prefix+e when espanso isn't installed (see
+# the if-shell guards in tmux.conf). Availability is checked live against
+# the running tmux server (`list-keys -T <table> -- <key>`), not against a
+# copy of each if-shell's own condition, so this can never drift out of sync
+# with what's actually bound right now. Backs bin/tmux-shortcuts-popup.
+#
+# The manifest below IS a second place to update alongside tmux.conf --
+# there's no way to enumerate "shortcuts this config intends to define"
+# other than listing them by hand.
+set -eu
+
+gray=$(printf '\033[38;5;244m')
+reset=$(printf '\033[0m')
+
+available() {
+  tmux list-keys -T "$1" -- "$2" >/dev/null 2>&1
+}
+
+# table          key      description
+manifest='
+prefix	C-a	Send C-a through to the app (press prefix twice)
+prefix	|	Split pane horizontally, inheriting the current path
+prefix	-	Split pane vertically, inheriting the current path
+prefix	g	lazygit in a popup
+prefix	u	ccusage: monthly usage/cost totals popup
+prefix	y	ccusage: per-model usage/cost distribution popup
+prefix	e	espanso trigger cheat sheet popup
+prefix	r	Reload tmux.conf
+prefix	S	This shortcut cheat sheet
+prefix	h	Move to the pane on the left
+prefix	j	Move to the pane below
+prefix	k	Move to the pane above
+prefix	l	Move to the pane on the right
+prefix	C-h	Select the previous window (repeatable)
+prefix	C-l	Select the next window (repeatable)
+prefix	b	Jump to the next window with a pending bell (repeatable)
+prefix	H	Resize the current pane left (repeatable)
+prefix	J	Resize the current pane down (repeatable)
+prefix	K	Resize the current pane up (repeatable)
+prefix	L	Resize the current pane right (repeatable)
+prefix	Escape	Enter copy-mode
+prefix	p	Paste buffer
+prefix	w	Window list (choose-tree)
+prefix	T	Obsidian daily-notes task picker popup
+copy-mode-vi	v	Begin a selection (while in copy-mode)
+copy-mode-vi	y	Copy the selection to the system clipboard (while in copy-mode)
+'
+
+printf '%s\n' "$manifest" | while IFS='	' read -r table key desc; do
+  [ -n "$table" ] || continue
+  if available "$table" "$key"; then
+    printf '%s\t%s\n' "$key" "$desc"
+  else
+    printf '%s\t%s %s(unavailable)%s\n' "$key" "$desc" "$gray" "$reset"
+  fi
+done | awk -F'\t' '{ printf "%-8s %s\n", $1, $2 }'
