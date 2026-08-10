@@ -38,7 +38,8 @@ prefix	k	Move to the pane above
 prefix	l	Move to the pane on the right
 prefix	C-h	Select the previous window (repeatable)
 prefix	C-l	Select the next window (repeatable)
-prefix	b	Jump to the next window with a pending bell (repeatable)
+prefix	n	Jump to the window waiting longest with a pending bell (repeatable)
+prefix	b	Jump back to the last active window (repeatable)
 prefix	H	Resize the current pane left (repeatable)
 prefix	J	Resize the current pane down (repeatable)
 prefix	K	Resize the current pane up (repeatable)
