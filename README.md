@@ -135,7 +135,9 @@ Similarly, `<prefix> T` opens an interactive popup
 your Obsidian daily notes, grouped by project tag: `space`/`enter` flips the
 highlighted task's checkbox in place in its note, `ctrl-h` hides/shows done
 tasks (shown by default, dimmed), `ctrl-r` forces a refresh, and `esc` closes
-the popup. A toggle writes straight to the note, so it shows up in Obsidian
+the popup. A task too wide for the popup wraps onto `↳`-prefixed continuation
+lines instead of being cut off, so long titles stay readable on a small screen.
+A toggle writes straight to the note, so it shows up in Obsidian
 immediately; conversely, editing a note directly in Obsidian while the popup
 is open is picked up there within a few seconds, no keypress needed
 (`bin/tmux-obsidian-task-poll`, on fzf's `every(5)`). This needs `fzf`
