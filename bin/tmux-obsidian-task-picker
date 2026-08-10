@@ -13,6 +13,13 @@
 # Keys: space/enter toggle the highlighted task; ctrl-h hides/shows done
 # tasks; ctrl-r forces a refresh; esc closes the popup.
 #
+# Width: rows wider than the popup wrap onto continuation lines rather than
+# being cut off (fzf's --wrap=word, see below) -- on a small screen the popup
+# is routinely narrower than a task line, and the text is the part worth
+# reading. Word mode rather than the default char mode because task titles
+# are prose, and breaking them mid-word is exactly what makes a wrapped
+# title hard to scan.
+#
 # Refresh: bin/tmux-obsidian-task-poll runs every 5 seconds (fzf's
 # every(5)) and reloads the list only if a daily note actually changed,
 # so an edit made directly in Obsidian shows up here on its own within a
@@ -35,6 +42,19 @@ fi
 if [ -z "$fzf" ]; then
   "$bindir/tmux-obsidian-task-list" | less -R
   exit 0
+fi
+
+# --wrap needs fzf 0.56+, so probe for it rather than passing it
+# unconditionally, for the same degrade-instead-of-break reason as the
+# lookup above: an older fzf rejects an unknown option outright, and the
+# binding's display-popup -E would slam the popup shut with no visible
+# explanation. `--version` short-circuits before fzf draws anything, so the
+# probe costs one exec and leaves the terminal alone. Probe the exact
+# `--wrap=word` spelling that gets passed, so an fzf that took --wrap but
+# not the mode argument can't slip through.
+wrap=""
+if "$fzf" --wrap=word --version >/dev/null 2>&1; then
+  wrap="--wrap=word"
 fi
 
 # Per-invocation state, so two popups open at once (two panes) never share
@@ -62,7 +82,7 @@ hidedone_action="if [ -f $hidedonefile ]; then rm -f $hidedonefile; else : > $hi
 "$feed" | "$fzf" \
   --ansi --delimiter="$us" --with-nth=1 --no-sort \
   --track --id-nth=2,4 \
-  --layout=reverse --header-first --highlight-line --cycle \
+  --layout=reverse --header-first --highlight-line --cycle $wrap \
   --prompt='task> ' --info=inline-right \
   --header='space/enter toggle · ctrl-h hide done · ctrl-r refresh · esc close' \
   --bind="space:transform:$toggle_action" \
