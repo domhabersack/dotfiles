@@ -1,17 +1,36 @@
 #!/bin/sh
-# Cheat sheet of every text-replacement trigger espanso.app knows about --
-# just the trigger strings, not what they expand to, so the list stays short
-# enough to scan at a glance. Reads matches via espanso's own CLI rather than
-# parsing its YAML directly, so this always reflects the live, merged config
-# across base.yml, packages, and any includes. Bound to prefix+e in tmux.conf.
+# Cheat sheet of every text-replacement trigger espanso.app knows about,
+# alongside what it expands to -- dimmed the same light gray tmux uses for
+# secondary status-line info (colour244; see status-fg in tmux.conf), so the
+# trigger itself stays the thing your eye catches first. Reads matches via
+# espanso's own CLI (JSON) rather than parsing its YAML directly, so this
+# always reflects the live, merged config across base.yml, packages, and any
+# includes. Bound to prefix+e in tmux.conf.
+#
+# Raw ANSI (not tmux's #[...] style tags): this script's stdout is the
+# popup's own terminal content, not a tmux format string, so only real
+# escape codes render -- #[...] would show up as literal text.
 set -eu
 
-triggers=$(espanso match list --only-triggers 2>/dev/null | sort -u)
+gray=$(printf '\033[38;5;244m')
+reset=$(printf '\033[0m')
 
-if [ -z "$triggers" ]; then
+# One row per trigger (a match can have several), tab-separated so a
+# replacement containing spaces stays intact when read back below; embedded
+# newlines are flattened to spaces so a multi-line replacement can't split a
+# trigger across rows. Plain join, not @tsv -- @tsv backslash-escapes its
+# fields for round-tripping, which would double every trigger's leading `\`.
+lines=$(espanso match list --json 2>/dev/null |
+  jq -r '.[] | .replace as $r | .triggers[] | . + "	" + ($r | gsub("\n"; " "))' |
+  sort -u -t'	' -k1,1)
+
+if [ -z "$lines" ]; then
   printf 'No espanso triggers found.\n'
   exit 0
 fi
 
-printf 'espanso triggers (%s)\n\n' "$(printf '%s\n' "$triggers" | wc -l | tr -d ' ')"
-printf '%s\n' "$triggers" | column
+printf 'espanso triggers (%s)\n\n' "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
+
+printf '%s\n' "$lines" | while IFS='	' read -r trigger replace; do
+  printf '%s %s%s%s\n' "$trigger" "$gray" "$replace" "$reset"
+done
