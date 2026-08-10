@@ -141,7 +141,7 @@ captured_for() {
 
 @test "clears the queue stamp once the bell clears" {
   set_sessions work
-  add_window work @1 0 100 done
+  add_window work @1 0 100 "done"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -f "$MOCK_DIR/bellat_@1" ]
