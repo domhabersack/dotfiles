@@ -1,0 +1,17 @@
+#!/bin/sh
+# Cheat sheet of every text-replacement trigger espanso.app knows about --
+# just the trigger strings, not what they expand to, so the list stays short
+# enough to scan at a glance. Reads matches via espanso's own CLI rather than
+# parsing its YAML directly, so this always reflects the live, merged config
+# across base.yml, packages, and any includes. Bound to prefix+e in tmux.conf.
+set -eu
+
+triggers=$(espanso match list --only-triggers 2>/dev/null | sort -u)
+
+if [ -z "$triggers" ]; then
+  printf 'No espanso triggers found.\n'
+  exit 0
+fi
+
+printf 'espanso triggers (%s)\n\n' "$(printf '%s\n' "$triggers" | wc -l | tr -d ' ')"
+printf '%s\n' "$triggers" | column
