@@ -1,0 +1,48 @@
+#!/bin/sh
+# Bound to fzf's every(3) in bin/tmux-espanso-popup: emits an fzf action,
+# reloading the picker's feed only when the espanso config actually changed
+# since the last tick, not on every tick regardless.
+#
+# The gate matters for the same reason bin/tmux-obsidian-task-poll's does:
+# an ungated every(3):reload would re-run the feed (an espanso + jq
+# subprocess) and reset fzf's scroll/selection every three seconds even when
+# nothing changed; this turns almost every tick into a cheap no-op instead.
+#
+# TMUX_ESPANSO_POLL_STAMP: path to a file this script owns, holding the
+# last-seen change stamp. Falls back to a fixed /tmp path so a direct,
+# manual invocation still behaves sanely; the popup sets its own
+# per-invocation file so concurrent popups never share state.
+#
+# No `set -e`: the first tick's `cat "$stampfile"` legitimately fails (the
+# stamp doesn't exist yet), and that's a normal case here, not an error to
+# abort on -- same reasoning as bin/tmux-obsidian-task-poll.
+
+stampfile="${TMUX_ESPANSO_POLL_STAMP:-/tmp/tmux-espanso-poll.stamp}"
+
+# Never fight someone mid-keystroke in fzf's query box.
+if [ "${FZF_IDLE_TIME_MS:-9999}" -lt 400 ]; then
+  echo ignore
+  exit 0
+fi
+
+config_dir=$(espanso path config 2>/dev/null) || config_dir=""
+if [ -z "$config_dir" ] || [ ! -d "$config_dir" ]; then
+  echo ignore
+  exit 0
+fi
+
+# cksum, not stat: mtime is 1-second granularity, and cksum's own output
+# includes each filename, so an added/removed/renamed file changes the
+# stamp too, not just an edited one. -exec, not a `find | xargs` pipeline --
+# espanso's own config dir lives under "Application Support" on macOS, and
+# xargs word-splits that space, corrupting every path built from it.
+stamp=$(find "$config_dir" -type f -exec cksum {} + 2>/dev/null | sort)
+prev=$(cat "$stampfile" 2>/dev/null)
+
+if [ "$stamp" = "$prev" ]; then
+  echo ignore
+  exit 0
+fi
+
+printf '%s\n' "$stamp" > "$stampfile"
+echo "reload-sync($HOME/.dotfiles/bin/tmux-espanso-feed)"

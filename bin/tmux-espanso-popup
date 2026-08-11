@@ -1,0 +1,46 @@
+#!/bin/sh
+# Interactive tmux popup bound to `prefix + e` (see tmux.conf): a live,
+# auto-refreshing cheat sheet of every espanso.app text-replacement trigger
+# and what it expands to (bin/tmux-espanso-feed), filterable via fzf's own
+# fuzzy search and scrollable the same way. Falls back to a static list
+# piped through less (also scrollable, just not auto-refreshing) when fzf
+# isn't available -- this check happens here, at runtime inside the popup's
+# own (non-interactive, non-login) shell, rather than in tmux.conf, because
+# that shell's PATH is not the interactive PATH fzf normally lives on (see
+# bin/tmux-ccusage-popup for the same issue with node/nvm).
+#
+# Refresh: bin/tmux-espanso-poll runs every 3 seconds (fzf's every(3)) and
+# reloads the feed only if the espanso config actually changed, so an edit
+# to base.yml (or any package) shows up here on its own within a few
+# seconds -- see that script for why the gate matters. --track keeps the
+# cursor on the same trigger across a reload instead of jumping to the top.
+set -eu
+
+bindir=$(dirname "$0")
+feed="$bindir/tmux-espanso-feed"
+poll="$bindir/tmux-espanso-poll"
+
+fzf=""
+if command -v fzf >/dev/null 2>&1; then
+  fzf=$(command -v fzf)
+elif [ -x "$HOME/.fzf/bin/fzf" ]; then
+  fzf="$HOME/.fzf/bin/fzf"
+fi
+
+if [ -z "$fzf" ]; then
+  "$feed" | less -R
+  exit 0
+fi
+
+# Per-invocation stamp, so two popups open at once never share poll state.
+stampfile=$(mktemp "${TMPDIR:-/tmp}/tmux-espanso-poll.XXXXXX")
+trap 'rm -f "$stampfile"' EXIT
+export TMUX_ESPANSO_POLL_STAMP="$stampfile"
+
+"$feed" | "$fzf" \
+  --ansi --no-sort --track \
+  --layout=reverse --header-first \
+  --prompt='espanso> ' --info=inline-right \
+  --header='type to filter · esc close' \
+  --bind="every(3):bg-transform:$poll" \
+  --bind='esc:abort'

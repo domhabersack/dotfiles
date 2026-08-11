@@ -1,0 +1,29 @@
+#!/bin/sh
+# One line per espanso.app trigger -- the trigger and what it expands to,
+# space-separated, the expansion dimmed the same light gray tmux uses for
+# secondary status-line info (colour244; see status-fg in tmux.conf) via raw
+# ANSI, not tmux's #[...] tags -- this output lands in a real terminal (fzf,
+# or less as a fallback), not a tmux format string. Backs bin/tmux-espanso-
+# popup's list content and its every()-driven reload via bin/tmux-espanso-
+# poll. Reads matches through espanso's own CLI (JSON) rather than parsing
+# its YAML directly, so this always reflects the live, merged config across
+# base.yml, packages, and any includes.
+set -eu
+
+gray=$(printf '\033[38;5;244m')
+reset=$(printf '\033[0m')
+
+# One row per trigger (a match can have several), tab-separated so a
+# replacement containing spaces stays intact when read back below; embedded
+# newlines are flattened to spaces so a multi-line replacement can't split a
+# trigger across rows. Plain join, not @tsv -- @tsv backslash-escapes its
+# fields for round-tripping, which would double every trigger's leading `\`.
+lines=$(espanso match list --json 2>/dev/null |
+  jq -r '.[] | .replace as $r | .triggers[] | . + "	" + ($r | gsub("\n"; " "))' |
+  sort -u -t'	' -k1,1)
+
+[ -n "$lines" ] || exit 0
+
+printf '%s\n' "$lines" | while IFS='	' read -r trigger replace; do
+  printf '%s %s%s%s\n' "$trigger" "$gray" "$replace" "$reset"
+done
