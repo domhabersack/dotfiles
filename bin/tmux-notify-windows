@@ -6,6 +6,12 @@
 # list (window_bell_flag; e.g. Claude Code waiting for input) and clears when you
 # visit the window.
 #
+# Windows are listed oldest-ring-first — left to right in the order they
+# started wanting attention — via the @bell_at timestamp stamped below, so
+# #{window_index} (which bin/tmux-sort-windows keeps alphabetical) never
+# determines this order. prefix+n (bin/tmux-next-bell) reads the same
+# @bell_at stamps to cycle the same oldest-first queue.
+#
 # Per-session: each session's status-right lists only its own windows, so a
 # client sees the windows in the session it's attached to. Driven by the
 # alert-bell hook (a new bell) and the window-select / -change / -unlink hooks
@@ -13,14 +19,29 @@
 # startup — see tmux.conf. status-right is otherwise unused.
 set -eu
 
+now=$(date +%s)
+
+# Stamp every window across all sessions: a newly-ringing window (flag=1, no
+# stamp yet) gets "now", fixing its place in the queue at first ring so a
+# later re-ring (e.g. Claude Code prompting again before you look) doesn't
+# shuffle it to the back. A window whose bell just cleared (flag=0, still
+# stamped) has its stamp removed so a future ring starts the queue fresh.
+tmux list-windows -a -F '#{window_bell_flag} #{window_id} #{@bell_at}' 2>/dev/null |
+while IFS=' ' read -r flag wid stamp; do
+  if [ "$flag" = 1 ] && [ -z "$stamp" ]; then
+    tmux set-window-option -t "$wid" @bell_at "$now"
+  elif [ "$flag" = 0 ] && [ -n "$stamp" ]; then
+    tmux set-window-option -t "$wid" -u @bell_at
+  fi
+done
+
 tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r sess; do
-  # ' · '-joined names of this session's windows with a pending bell. The flag
-  # (0/1, never contains spaces) is read as the first field and the name as the
-  # rest, so a window name containing spaces stays intact.
-  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag} #{window_name}' 2>/dev/null |
-    while IFS=' ' read -r flag name; do
-      if [ "$flag" = 1 ]; then printf '%s · ' "$name"; fi
-    done)
+  # This session's windows with a pending bell, oldest ring first (ascending
+  # @bell_at), ' · '-joined. Tab-separated so a window name containing spaces
+  # stays intact when we cut it back out below.
+  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag}	#{@bell_at}	#{window_name}' 2>/dev/null |
+    awk -F'	' '$1 == 1' | sort -t'	' -k2,2n | cut -f3 |
+    while IFS= read -r name; do printf '%s · ' "$name"; done)
   names=${names% · }
 
   if [ -n "$names" ]; then
