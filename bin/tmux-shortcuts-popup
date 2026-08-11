@@ -1,0 +1,38 @@
+#!/bin/sh
+# Interactive tmux popup bound to `prefix + S` (see tmux.conf): a filterable,
+# scrollable cheat sheet of every custom tmux shortcut this dotfiles repo
+# defines (bin/tmux-shortcuts-feed), with any shortcut that's currently
+# gated off (e.g. prefix+e without espanso installed) marked "(unavailable)".
+# Falls back to a static list piped through less (also scrollable, just not
+# filterable) when fzf isn't available -- this check happens here, at
+# runtime inside the popup's own (non-interactive, non-login) shell, rather
+# than in tmux.conf, because that shell's PATH is not the interactive PATH
+# fzf normally lives on (see bin/tmux-ccusage-popup for the same issue with
+# node/nvm).
+#
+# No auto-refresh: unlike the espanso popup, these shortcuts only change via
+# an explicit prefix+r config reload, which is rare and deliberate enough
+# that re-opening the popup (which re-checks availability live) is enough.
+set -eu
+
+bindir=$(dirname "$0")
+feed="$bindir/tmux-shortcuts-feed"
+
+fzf=""
+if command -v fzf >/dev/null 2>&1; then
+  fzf=$(command -v fzf)
+elif [ -x "$HOME/.fzf/bin/fzf" ]; then
+  fzf="$HOME/.fzf/bin/fzf"
+fi
+
+if [ -z "$fzf" ]; then
+  "$feed" | less -R
+  exit 0
+fi
+
+"$feed" | "$fzf" \
+  --ansi --no-sort \
+  --layout=reverse --header-first \
+  --prompt='shortcut> ' --info=inline-right \
+  --header='type to filter · esc close' \
+  --bind='esc:abort'
