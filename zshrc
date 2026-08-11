@@ -20,14 +20,30 @@ fi
 # lazy-load: shims defer the slow nvm.sh source until first use
 export NVM_DIR="$HOME/.nvm"
 _load_nvm() {
-  unset -f nvm node npm npx
+  # 2>/dev/null because node/npm/npx are only conditionally shimmed below:
+  # where a system node exists they were never defined, and zsh's unset -f
+  # complains ("no such hash table element") about each missing one.
+  unset -f nvm node npm npx 2>/dev/null
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
   [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 }
+
+# nvm itself is always shimmed: it has no non-nvm equivalent, so gating it
+# would make `nvm use`/`nvm install` simply unavailable.
 nvm()  { _load_nvm; nvm  "$@"; }
-node() { _load_nvm; node "$@"; }
-npm()  { _load_nvm; npm  "$@"; }
-npx()  { _load_nvm; npx  "$@"; }
+
+# node/npm/npx are only shimmed when nothing real is on PATH. On a machine
+# with a brew-installed node (this one has node@22), the shims would
+# otherwise shadow a perfectly good /opt/homebrew/bin/npm and pay the
+# nvm.sh source cost on first use just to end up somewhere similar. Where
+# there is no system node, the shims stay and nvm provides it as before.
+# `nvm use` still wins either way: it prepends its version's bin to PATH,
+# and _load_nvm has already unset every shim by then.
+if ! command -v npm >/dev/null 2>&1; then
+  node() { _load_nvm; node "$@"; }
+  npm()  { _load_nvm; npm  "$@"; }
+  npx()  { _load_nvm; npx  "$@"; }
+fi
 
 
 ################
