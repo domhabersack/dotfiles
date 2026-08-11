@@ -286,8 +286,13 @@ md() {
 # ALIASES      #
 ################
 
-# use color in `grep`, add line numbers, search directories recursively, ignore vim binary files
-alias grep='grep --binary-file=without-match --color --directories=recurse --line-number'
+# use color in `grep`, add line numbers, ignore vim binary files
+#
+# Deliberately no --directories=recurse: with -r/-R and no explicit file
+# argument, grep ignores stdin entirely and recurses through cwd instead, so
+# `cmd | grep foo` silently searches "." rather than the pipe. Pass -r
+# explicitly when a directory search is actually wanted.
+alias grep='grep --binary-file=without-match --color --line-number'
 
 # ls with color (alias set in COLORS block above)
 alias la='ls -la'
