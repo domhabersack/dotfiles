@@ -47,6 +47,7 @@ prefix	L	Resize the current pane right (repeatable)
 prefix	Escape	Enter copy-mode
 prefix	p	Paste buffer
 prefix	w	Window list (choose-tree)
+prefix	P	Toggle a "come back later" 📌 on this window, shown in the window list
 prefix	T	Obsidian daily-notes task picker popup
 copy-mode-vi	v	Begin a selection (while in copy-mode)
 copy-mode-vi	y	Copy the selection to the system clipboard (while in copy-mode)
