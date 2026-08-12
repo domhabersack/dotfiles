@@ -182,6 +182,21 @@ the bars decay even when idle. The bar is decorative only — like a leading mar
 emoji, it is not part of the window name, so it never affects window sorting or
 coloring.
 
+`<prefix> P` **pins** the current window — a "come back to this later" mark,
+shown as a 📌 between the freshness bar and the name. Pressing it again unpins.
+It's deliberately independent of the window name: a plain `@pinned` window
+option, so renaming a window keeps its pin, and the mark never reaches
+`bin/tmux-sort-windows` or `bin/tmux-color-windows` the way a leading marker
+emoji in the name would. Unlike every other window option here, though, nothing
+can re-derive `@pinned` from the world — it exists only because you pressed the
+key — and tmux-resurrect doesn't save arbitrary window options, so a reboot
+would silently drop every pin. `bin/tmux-pinned-save` writes them to
+`~/.tmux/resurrect/pinned` from resurrect's `post-save-all` hook and
+`bin/tmux-pinned-restore` re-applies them from `post-restore-all`, keyed by
+session + window name (the only identifiers that survive a restore — window ids
+are regenerated and indexes shift on every sort). Two windows sharing a name in
+one session are indistinguishable to that key, so pinning one restores both.
+
 Each window-list entry also shows its git **branch** in dim parentheses after
 the name — but only when it's *not* `main`, so a window parked on a feature
 branch reads `codeshots (feat/foo)` and stands out, while a window on the trunk
