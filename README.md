@@ -258,9 +258,8 @@ The **local diff summary** on the name row — `4 files · +140 -30`, with the
 counts in green and red — is how far the window's **working state** has drifted
 from the **local** trunk. Working state means everything you'd lose by resetting
 to the trunk: the commits on this branch, the staged changes, the unstaged
-edits, and the untracked files (`.gitignore` respected, so build output never
-inflates it). It answers "how big is what I'm sitting on right now", which is
-why it sits next to the branch rather than on a row of its own.
+edits, and the untracked files. It answers "how big is what I'm sitting on right
+now", which is why it sits next to the branch rather than on a row of its own.
 
 The comparison is against the trunk **ref itself** — `git diff main`, not the
 merge base. So when local `main` moves ahead of the branch, main's own commits
@@ -269,19 +268,51 @@ back to just this branch's work. That's deliberate: it tracks the real distance
 to the trunk sitting on *this machine*, so it reacts to a rebase (and to
 updating `main`) the way you'd expect. The branch-PR row below it carries the
 merge-base view GitHub reports, so both readings are on screen at once. Trunk is
-`main`, falling back to `master`; both looked up as **local** refs only, so a
+`main`, falling back to `master`, and both are resolved explicitly as
+`refs/heads/` — a repo carrying a **tag** named `main` would otherwise be
+measured against the tag, since git's own disambiguation prefers tags. A
 remote-tracking `origin/main` with no local branch shows nothing.
+
+**Ignored files never count**, whether or not git is tracking them. Untracked
+ones never enter the count in the first place; a file that is tracked *despite*
+matching an ignore rule — a `node_modules` committed before someone added it to
+`.gitignore` — is filtered out too, which `.gitignore` alone would not do, since
+ignore rules don't apply to already-tracked files. Every ignore source counts:
+`.gitignore` at any depth, `.git/info/exclude`, and `core.excludesFile`
+(`~/.gitignore_global` here).
+
+Two deliberate rounding choices: a **rename** reads as a deletion plus an
+addition rather than as `+0 -0`, which is both the more honest answer to "what
+would resetting to the trunk discard" and what keeps every changed path a real
+path the ignore filter can resolve; and a file over **8 MB** is reported as a
+changed file with no line count, exactly as git already does for binaries —
+a multi-megabyte text file's line count is not information anyone reads off a
+status bar, and without a cap a stray database dump sitting untracked in the
+tree would be re-read in full on every tick.
 
 `bin/tmux-local-diff` computes the summary for a directory (and prints nothing
 outside a work tree, with no local trunk, or with nothing changed — an unchanged
-working state doesn't get a status-bar segment). `bin/tmux-local-diff-windows`
-stamps it into `@local_diff` on window/pane select, session change and window
-create, and `bin/tmux-local-diff-watch` re-runs it every 30s — the timer is the
-main path here, since editing files in a window you then sit still in fires no
-tmux event. Unlike `@git_branch`, only the **active** window of each attached
-session is stamped: nothing but `status-format[1]` reads this option, and it
-costs a real `git diff` over the tree rather than a ref lookup. Everything is
-local git — no network, nothing cached.
+working state doesn't get a status-bar segment). It runs from the repo **root**,
+so a pane in a subdirectory still measures the whole repo even under
+`diff.relative`. Untracked files are counted **by git, not read by this script**:
+the repo's index is copied to a temp file, untracked files are registered in that
+copy as intent-to-add, and one `git diff` then reports committed, staged,
+unstaged and untracked work together. The real index is never touched and no
+objects are written. Letting git do the reading is what makes it safe on a tree
+containing a dangling symlink, a symlink to `/dev/zero`, or a file named `-`,
+`x=y`, or something with a newline in it — all of which defeat the obvious
+`xargs … wc -l` approach, some by hanging and some by silently zeroing the count.
+A file git genuinely cannot read (mode 000) is dropped from the count rather than
+being allowed to blank it.
+
+`bin/tmux-local-diff-windows` stamps the result into `@local_diff` on
+window/pane select, session change and window create, and
+`bin/tmux-local-diff-watch` re-runs it every 30s — the timer is the main path
+here, since editing files in a window you then sit still in fires no tmux event.
+Unlike `@git_branch`, only the **active** window of each attached session is
+stamped: nothing but `status-format[1]` reads this option, and it costs a real
+`git diff` over the tree rather than a ref lookup. Everything is local git — no
+network, nothing cached.
 
 The **branch-PR row** is rendered by `bin/tmux-branch-pr` (the renderer,
 triggered on window/pane switches, branch change, and a background ticker) and
