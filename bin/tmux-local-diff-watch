@@ -1,0 +1,26 @@
+#!/bin/sh
+# Background ticker that re-stamps @local_diff on a fixed interval, so edits
+# made in a window you then stay in are reflected even though no tmux event
+# (window/pane select, new window) fired to re-run bin/tmux-local-diff-windows.
+# Navigating between windows updates instantly via the hooks; this backstops
+# the "sat still and kept typing" case, which for this feature is the normal
+# one rather than the edge case.
+#
+# 30s rather than the 60s the PR watchers use: line counts move with every
+# save, so a minute-old number reads as wrong in a way a minute-old PR status
+# doesn't. Still cheap -- one `git diff` per attached session's active window.
+# Single-instance guarded: safe to call on every config reload.
+
+PIDFILE=/tmp/tmux-local-diff-watch.pid
+INTERVAL=30
+
+# Reuse the running ticker if it is still alive.
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  exit 0
+fi
+
+nohup sh -c \
+  'while :; do ~/.dotfiles/bin/tmux-local-diff-windows; sleep '"$INTERVAL"'; done' \
+  >/dev/null 2>&1 &
+
+echo $! > "$PIDFILE"
