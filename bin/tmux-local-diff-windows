@@ -1,0 +1,42 @@
+#!/bin/sh
+# Stamps @local_diff -- the working-state-vs-local-trunk summary from
+# bin/tmux-local-diff -- onto the windows whose value can actually be seen, so
+# the status bar's top row can print "dotfiles (feat/x) · 4 files · +120 -30"
+# right after the branch.
+#
+# Only the ACTIVE window of each attached session is computed, unlike
+# bin/tmux-git-branch-windows which covers every window: @local_diff is read
+# solely by status-format[1] (which resolves against the client's current
+# window), never by the choose-tree format, so a value stamped on a background
+# window would be work nobody looks at. That matters more here than for the
+# branch label -- this runs a real `git diff` over the tree, not a ref lookup,
+# so a session with twenty windows would pay twenty diffs per tick for one
+# visible number.
+#
+# Re-run on window/pane select, session change and window create (hooks in
+# tmux.conf) so navigating updates immediately, plus a slow ticker
+# (bin/tmux-local-diff-watch) that catches the case this feature exists for:
+# editing files in a window you then sit still in, with no tmux event to fire.
+set -eu
+
+DIFF="$HOME/.dotfiles/bin/tmux-local-diff"
+
+# pane_current_path is the loop's LAST field so a path containing spaces stays
+# intact; the flags and window_id never contain spaces.
+tmux list-windows -a -F '#{session_attached} #{window_active} #{window_id} #{pane_current_path}' |
+while read -r attached active wid path; do
+  [ "$attached" -gt 0 ] || continue
+  [ "$active" = "1" ] || continue
+
+  if [ -n "$path" ]; then
+    summary=$("$DIFF" "$path" 2>/dev/null) || summary=''
+  else
+    # No path (e.g. a window caught mid-teardown): clear rather than resolve,
+    # since an empty arg would make the helper inspect its own cwd instead.
+    summary=''
+  fi
+  tmux set-window-option -t "$wid" @local_diff "$summary"
+done
+
+# Repaint so a freshly-set summary shows immediately, not on the next tick.
+tmux refresh-client -S 2>/dev/null

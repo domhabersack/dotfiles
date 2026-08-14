@@ -224,8 +224,10 @@ The status bar carries the active window's identity, the open PR for its
 branch, and repo-wide health on up to four stacked rows (below the horizontal
 rule):
 
-1. **Name + branch** (`status-format[1]`, from `window_name` + `@git_branch`) —
-   always present; the window name plus, in a git repo, its branch.
+1. **Name + branch + local diff** (`status-format[1]`, from `window_name` +
+   `@git_branch` + `@local_diff`) — always present; the window name plus, in a
+   git repo, its branch, plus how far the working state has drifted from the
+   local trunk (see below).
 2. **Branch PR** (`status-format[2]`, from `@branch_pr`) — the open pull request
    whose head *is* the current branch, if one exists: its number, commit count,
    diff size, checks, review state, and unresolved conversations. This is "open work"
@@ -239,7 +241,7 @@ has something; the branch-PR row sits above the health row, so when there's no
 PR the health row slides up. For whichever repo the active pane is in, e.g.:
 
 ```
-dotfiles (feat/foo)
+dotfiles (feat/foo) · 4 files · +140 -30
 PR #42 · 12 commits · 3 files · +120 -30 · all checks have passed · approved · 2 unresolved
 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 ```
@@ -251,6 +253,35 @@ both — rather than leaving an empty trailing line. It's called from the tail o
 window/pane switch and cache update) and from the `pane-mode-changed` hook when
 leaving a mode; while a pane is in tree-mode (`prefix w`, zoomed full-screen)
 the bar is hidden entirely.
+
+The **local diff summary** on the name row — `4 files · +140 -30`, with the
+counts in green and red — is how far the window's **working state** has drifted
+from the **local** trunk. Working state means everything you'd lose by resetting
+to the trunk: the commits on this branch, the staged changes, the unstaged
+edits, and the untracked files (`.gitignore` respected, so build output never
+inflates it). It answers "how big is what I'm sitting on right now", which is
+why it sits next to the branch rather than on a row of its own.
+
+The comparison is against the trunk **ref itself** — `git diff main`, not the
+merge base. So when local `main` moves ahead of the branch, main's own commits
+show up inverted in the counts, and rebasing onto `main` makes the number shrink
+back to just this branch's work. That's deliberate: it tracks the real distance
+to the trunk sitting on *this machine*, so it reacts to a rebase (and to
+updating `main`) the way you'd expect. The branch-PR row below it carries the
+merge-base view GitHub reports, so both readings are on screen at once. Trunk is
+`main`, falling back to `master`; both looked up as **local** refs only, so a
+remote-tracking `origin/main` with no local branch shows nothing.
+
+`bin/tmux-local-diff` computes the summary for a directory (and prints nothing
+outside a work tree, with no local trunk, or with nothing changed — an unchanged
+working state doesn't get a status-bar segment). `bin/tmux-local-diff-windows`
+stamps it into `@local_diff` on window/pane select, session change and window
+create, and `bin/tmux-local-diff-watch` re-runs it every 30s — the timer is the
+main path here, since editing files in a window you then sit still in fires no
+tmux event. Unlike `@git_branch`, only the **active** window of each attached
+session is stamped: nothing but `status-format[1]` reads this option, and it
+costs a real `git diff` over the tree rather than a ref lookup. Everything is
+local git — no network, nothing cached.
 
 The **branch-PR row** is rendered by `bin/tmux-branch-pr` (the renderer,
 triggered on window/pane switches, branch change, and a background ticker) and
