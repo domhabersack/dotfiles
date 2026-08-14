@@ -103,10 +103,13 @@ trap 'rm -f "$index"; exit 129' HUP
 # is the correct starting point there -- it has no tracked files.
 index_path=$(git -C "$root" rev-parse --git-path index 2>/dev/null) || index_path=''
 case "$index_path" in
-  '')  : ;;
-  /*)  [ -f "$index_path" ] && cp "$index_path" "$index" || : ;;
-  *)   [ -f "$root/$index_path" ] && cp "$root/$index_path" "$index" || : ;;
+  '') : ;;
+  /*) : ;;
+  *)  index_path="$root/$index_path" ;;
 esac
+if [ -n "$index_path" ] && [ -f "$index_path" ]; then
+  cp "$index_path" "$index" 2>/dev/null || :
+fi
 
 # Register untracked files as intent-to-add in the COPY. -N records no content
 # and writes no objects; it only makes the files visible to the diff below.
