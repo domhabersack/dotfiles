@@ -1,0 +1,30 @@
+#!/bin/sh
+# Dump every pinned window (@pinned, toggled by prefix+P — see tmux.conf) to a
+# sidecar state file, so the marks survive the tmux server going away.
+#
+# tmux-resurrect saves windows, panes and running processes but NOT arbitrary
+# window user options, and unlike this config's other window options (@freshness,
+# @git_branch, @tmux_color, @tmux_tasks) there is no watcher that can re-derive
+# @pinned from the world — it exists only because you pressed prefix+P. So it has
+# to be written down. Wired to @resurrect-hook-post-save-all, which fires at the
+# end of every save, manual (prefix+C-s) and continuum's 15-minute autosave alike;
+# bin/tmux-pinned-restore reads the file back.
+#
+# The key is "session name TAB window name", because that is all that survives a
+# restore: window_id is regenerated and window_index shifts every time
+# bin/tmux-sort-windows reshuffles. Two windows sharing a name within one session
+# are therefore indistinguishable — restoring pins one pins the other. That is
+# the accepted cost of the only stable key available.
+set -eu
+
+state="$HOME/.tmux/resurrect/pinned"
+mkdir -p "$(dirname "$state")"
+
+# Filter in the format string rather than in the shell so window names — which
+# may contain spaces — are never word-split. Unpinned windows render as an empty
+# line, which `awk NF` drops (and, unlike grep, awk exits 0 when nothing matches,
+# so an empty result is not an error under `set -e`). Write-then-rename so a save
+# racing a restore can never read a half-written file.
+tmux list-windows -a -F '#{?#{==:#{@pinned},1},#{session_name}	#{window_name},}' |
+  awk 'NF' > "$state.tmp"
+mv "$state.tmp" "$state"

@@ -1,0 +1,29 @@
+#!/bin/sh
+# Re-apply the @pinned marks written by bin/tmux-pinned-save, so the 📌 in
+# choose-tree survives a reboot. Wired to @resurrect-hook-post-restore-all, which
+# fires after tmux-resurrect has recreated every session, window and pane —
+# @resurrect-hook-pre-restore-all would be too early, as there would be nothing
+# to mark yet. (post-restore-all is real but undocumented: it is absent from
+# tmux-resurrect's docs/hooks.md and present in scripts/restore.sh.)
+#
+# Additive: windows missing from the state file are left alone rather than
+# explicitly unpinned. Restores only happen at server start, when nothing is
+# pinned yet, so there is no stale state to clear — and leaving them alone means
+# a truncated or half-written state file can never wipe live marks.
+set -eu
+
+state="$HOME/.tmux/resurrect/pinned"
+[ -f "$state" ] || exit 0
+
+# Match the live windows against the file in one awk pass and emit window ids.
+# Targeting by id (@5) rather than "session:name" sidesteps tmux's target
+# parsing entirely: a window named "3" would otherwise resolve as index 3, and
+# one named "*" as a glob.
+tmux list-windows -a -F '#{session_name}	#{window_name}	#{window_id}' |
+  awk -F'\t' -v state="$state" '
+    BEGIN { while ((getline line < state) > 0) pinned[line] = 1 }
+    (($1 "\t" $2) in pinned) { print $3 }
+  ' |
+  while IFS= read -r wid; do
+    tmux set-window-option -t "$wid" @pinned 1
+  done
