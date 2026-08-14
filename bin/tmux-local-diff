@@ -3,7 +3,7 @@
 # given as $1 (default: the current directory) -- how far its CURRENT WORKING
 # STATE has drifted from the local trunk:
 #
-#   4 files · +120 -30
+#   4 files · +140 -30
 #
 # "Working state" means everything you'd lose by resetting to the trunk: the
 # commits on this branch, the staged changes, the unstaged edits, and the
@@ -13,29 +13,53 @@
 # The comparison is against the LOCAL trunk ref, literally -- `git diff main`,
 # not the merge base. So when local main moves ahead of the branch, main's own
 # commits show up inverted in these counts, and rebasing onto main makes the
-# number shrink back down to just this branch's work. That's deliberate: the
-# number tracks the real distance to the trunk sitting on this machine, so it
-# reacts to a rebase (and to fetching main) the way you'd expect. Use the PR row
+# number shrink back to just this branch's work. That's deliberate: the number
+# tracks the real distance to the trunk sitting on this machine, so it reacts
+# to a rebase (and to fetching main) the way you'd expect. Use the PR row
 # (bin/tmux-branch-pr) for the merge-base view GitHub shows.
 #
-# Trunk is "main", falling back to "master" for repos that never renamed -- both
-# checked as local refs only, since the whole point is the trunk on this
-# machine. Prints nothing (exit 0) when $1 isn't a work tree, when neither
-# trunk ref exists locally, or when there's no difference at all -- an unchanged
-# working state has nothing worth spending a status-bar segment on. Sitting ON
-# the trunk is not a special case: the diff is then simply the uncommitted work,
-# which is exactly what you'd want to see there.
+# Trunk is "main", falling back to "master" for repos that never renamed. Both
+# are resolved as refs/heads/ EXPLICITLY, never as bare names: git's
+# disambiguation prefers a tag over a branch, so a repo carrying a tag named
+# "main" would otherwise be measured against the tag -- silently, since the
+# "refname is ambiguous" warning goes to stderr. Prints nothing (exit 0) when
+# $1 isn't a work tree, when neither trunk ref exists locally, or when there's
+# no difference at all -- an unchanged working state has nothing worth spending
+# a status-bar segment on. Sitting ON the trunk is not a special case: the diff
+# is then simply the uncommitted work, which is exactly what you'd want there.
 #
-# Untracked files count as pure additions (all their lines added), so a
-# brand-new file registers the moment it exists rather than only once it's
-# `git add`ed. .gitignore is respected (--exclude-standard), so build output
-# and vendored trees never inflate the count.
+# IGNORED FILES NEVER COUNT, whether or not git is tracking them. Untracked
+# ones are dropped by `git add`'s own exclude handling; files that are tracked
+# *despite* matching an ignore rule -- a node_modules committed before someone
+# added it to .gitignore -- are dropped by the check-ignore pass below, which
+# .gitignore alone would not do (ignore rules don't apply to tracked files).
+# Every ignore source counts, since both mechanisms use git's standard set:
+# .gitignore at any depth, .git/info/exclude, and core.excludesFile
+# (~/.gitignore_global here -- see gitconfig).
+#
+# Untracked files are counted by git rather than read by this script, via a
+# THROWAWAY INDEX: the repo's index is copied to a temp file, untracked files
+# are registered in that copy as intent-to-add, and one `git diff` then reports
+# committed, staged, unstaged and untracked work together. The repo's real
+# index is never touched and no objects are written. Letting git do the reading
+# is what makes this safe on a working tree containing a dangling symlink, a
+# symlink to /dev/zero, a file named "-" or "x=y", or a filename with a
+# newline -- all of which defeat the obvious `xargs ... wc -l` approach, some
+# by hanging forever and some by silently zeroing the whole count.
 #
 # Unlike bin/tmux-git-branch, the output DOES carry tmux #[...] style tags: the
 # +added / -deleted counts are green/red inline, which a caller can't apply from
-# the outside. It contains no literal "#", so a caller re-expanding it with
-# #{E:...} needs no extra escaping.
+# the outside. It contains no "#{" or "#(" format sequences, so a caller
+# re-expanding it with #{E:...} can't be made to evaluate anything -- the only
+# "#" characters are the literal style tags.
 set -eu
+
+# Line counting stops at this size and the file is reported as a changed file
+# with no line count, exactly as git already does for binaries. A multi-megabyte
+# text file's line count is not information anyone reads off a status bar, and
+# without a cap a stray database dump or downloaded corpus sitting untracked in
+# the tree would be re-read in full on every tick of bin/tmux-local-diff-watch.
+BIG_FILE_THRESHOLD=8m
 
 dir=${1:-.}
 
@@ -44,54 +68,121 @@ dir=${1:-.}
 # scratch windows), so it should be the fast one.
 git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
-# Local trunk only -- refs/heads/, never refs/remotes/. A repo with neither
-# has no trunk to measure against, so there's nothing to say.
+# Everything below runs from the repo ROOT rather than $dir. Two reasons: a
+# pane sitting in a subdirectory must still measure the whole repo, and
+# `diff.relative=true` (a real setting people enable) would otherwise silently
+# restrict the diff to that subdirectory -- reporting "no changes" for a repo
+# full of them. At the root, relative and absolute are the same thing.
+root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || exit 0
+[ -n "$root" ] || exit 0
+
 trunk=''
 for candidate in main master; do
-  if git -C "$dir" rev-parse --verify --quiet "refs/heads/$candidate" >/dev/null 2>&1; then
-    trunk=$candidate
+  if git -C "$root" rev-parse --verify --quiet "refs/heads/$candidate" >/dev/null 2>&1; then
+    trunk="refs/heads/$candidate"
     break
   fi
 done
 [ -n "$trunk" ] || exit 0
 
-# Tracked changes: `git diff <ref>` compares the WORKING TREE to that ref, so
-# this single call already folds in committed, staged and unstaged work. Binary
-# files report "-" instead of line counts -- they still count as a changed file,
-# they just contribute no lines, hence the numeric guard on each field.
-tracked=$(git -C "$dir" diff --numstat "$trunk" -- 2>/dev/null | awk '
-  { files++
-    if ($1 ~ /^[0-9]+$/) added   += $1
-    if ($2 ~ /^[0-9]+$/) deleted += $2 }
+# The throwaway index. mktemp rather than a fixed path so two tmux hooks firing
+# at once can't corrupt each other's copy; removed on every exit path, including
+# an interrupted run.
+index=$(mktemp "${TMPDIR:-/tmp}/tmux-local-diff.XXXXXX") || exit 0
+trap 'rm -f "$index"' EXIT
+trap 'rm -f "$index"; exit 130' INT
+trap 'rm -f "$index"; exit 143' TERM
+trap 'rm -f "$index"; exit 129' HUP
+
+# Seed it from the repo's current index so staged work is preserved. --git-path
+# rather than "$root/.git/index": in a linked worktree .git is a FILE and the
+# real index lives under .git/worktrees/<name>/, and --git-path is what resolves
+# that. The path comes back relative to $root for a normal repo and absolute for
+# a worktree, hence the leading-slash test. A repo with no index file yet (git
+# init, nothing added) simply starts from the empty index mktemp gave us, which
+# is the correct starting point there -- it has no tracked files.
+index_path=$(git -C "$root" rev-parse --git-path index 2>/dev/null) || index_path=''
+case "$index_path" in
+  '')  : ;;
+  /*)  [ -f "$index_path" ] && cp "$index_path" "$index" || : ;;
+  *)   [ -f "$root/$index_path" ] && cp "$root/$index_path" "$index" || : ;;
+esac
+
+# Register untracked files as intent-to-add in the COPY. -N records no content
+# and writes no objects; it only makes the files visible to the diff below.
+# `git add` applies the standard exclude rules, so ignored files never enter.
+GIT_INDEX_FILE="$index" git -C "$root" add -A -N >/dev/null 2>&1 || :
+
+# --no-renames so every changed path is a plain path: with rename detection on,
+# numstat collapses a rename into a single "old => new" (or "dir/{a => b}")
+# field that neither the ignore filter nor the parser below can resolve back to
+# a real path. The cost is that a rename reads as a delete plus an add rather
+# than "0 0", which is also the more honest answer for "what would resetting to
+# the trunk discard".
+# quotePath=false keeps non-ASCII paths literal so the ignore filter can match
+# them; core.bigFileThreshold applies the line-counting cap described above.
+diff_numstat() {
+  GIT_INDEX_FILE="$index" git -C "$root" \
+    -c core.quotePath=false \
+    -c "core.bigFileThreshold=$BIG_FILE_THRESHOLD" \
+    diff --numstat --no-renames "$trunk" -- 2>/dev/null
+}
+
+# A file git cannot read (mode 000, or one deleted between the add and the diff
+# -- the 30s ticker will eventually race a build tool) makes the whole diff exit
+# fatal, which would blank the count for the entire repo rather than for that
+# one file. The common case pays nothing for this: only after a failure do we
+# hunt down the unreadable entries, drop them from the throwaway index, and
+# retry. Symlinks are never the culprit -- git reads the link itself, not its
+# target -- so a dangling link or a link to /dev/zero is left alone.
+if ! numstat=$(diff_numstat); then
+  git -C "$root" ls-files --others --exclude-standard 2>/dev/null |
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    [ -L "$root/$file" ] && continue
+    [ -r "$root/$file" ] && continue
+    GIT_INDEX_FILE="$index" git -C "$root" rm --cached --quiet --ignore-unmatch \
+      -- "$file" >/dev/null 2>&1 || :
+  done
+  # Still failing means something outside the untracked set is unreadable; a
+  # working tree that broken gets no summary rather than a wrong one.
+  numstat=$(diff_numstat) || exit 0
+fi
+
+[ -n "$numstat" ] || exit 0
+
+# Tracked-but-ignored paths. Only the CHANGED paths are checked, not every
+# tracked file in the repo, so a committed node_modules costs one pass over a
+# handful of lines rather than tens of thousands. --no-index is what makes this
+# work at all: without it check-ignore refuses to call a tracked file ignored,
+# which is precisely the case being filtered. Exit 1 just means "none matched".
+ignored=$(printf '%s\n' "$numstat" | cut -f3- |
+  git -C "$root" check-ignore --no-index --stdin 2>/dev/null) || ignored=''
+
+# FS="\t" so a path containing spaces stays in one field; a path containing a
+# TAB spills into $4.. and is rejoined. numstat prints "-" for both counts of a
+# binary (or over-threshold) file, which coerces to 0 -- such a file counts as
+# changed but contributes no lines. The ignored set arrives through the
+# environment rather than -v so awk applies no backslash-escape processing to
+# the paths.
+summary=$(printf '%s\n' "$numstat" | IGNORED="$ignored" awk -F'\t' '
+  BEGIN {
+    n = split(ENVIRON["IGNORED"], list, "\n")
+    for (i = 1; i <= n; i++) if (list[i] != "") skip[list[i]] = 1
+  }
+  NF >= 3 {
+    path = $3
+    for (i = 4; i <= NF; i++) path = path "\t" $i
+    if (path in skip) next
+    files++
+    added   += $1
+    deleted += $2
+  }
   END { printf "%d %d %d\n", files + 0, added + 0, deleted + 0 }
-') || tracked='0 0 0'
+')
 # shellcheck disable=SC2086  # deliberate: split awk's three space-joined counts
-set -- $tracked
+set -- $summary
 files=$1 added=$2 deleted=$3
-
-# Untracked files, counted as all-additions. Listed from the repo ROOT, not
-# from $dir: `git diff` above already covers the whole tree no matter where it
-# runs, but `ls-files` scopes to its working directory, so a pane sitting in a
-# subdirectory would otherwise count that subtree's untracked files only.
-root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || root=$dir
-[ -n "$root" ] || root=$dir
-
-untracked_files=$(git -C "$root" ls-files --others --exclude-standard 2>/dev/null \
-  | awk 'END { print NR + 0 }') || untracked_files=0
-
-# One awk over the whole list rather than one per file: this runs every 30s on
-# a live status bar, and a repo that forgot to ignore a dependency tree would
-# otherwise fork thousands of processes a tick. NUL-delimited (-z/-0) so paths
-# containing spaces survive, and `END{print NR}` rather than `wc -l` so a final
-# line with no trailing newline still counts. xargs may split a very long list
-# into several awk runs, each printing its own total, so the tail sums them; on
-# an empty list xargs runs nothing at all and the sum falls through to 0.
-untracked_lines=$(git -C "$root" ls-files --others --exclude-standard -z 2>/dev/null \
-  | (cd "$root" && xargs -0 awk 'END { print NR + 0 }' 2>/dev/null) \
-  | awk '{ total += $1 } END { print total + 0 }') || untracked_lines=0
-
-files=$(( files + untracked_files ))
-added=$(( added + untracked_lines ))
 
 [ "$files" -gt 0 ] || exit 0
 
