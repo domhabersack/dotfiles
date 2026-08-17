@@ -202,7 +202,12 @@ require('nvim-tree').setup({
   filters = { custom = { '^\\.git$' } },   -- dotfiles stay visible, .git itself does not
   renderer = {
     add_trailing = true,                   -- trailing "/" marks directories
-    indent_markers = { enable = true },
+    indent_markers = {
+      enable = true,
+      -- "item" defaults to the same glyph as "edge", which leaves non-last
+      -- entries without an arm; ├ makes them branch like the last one does
+      icons = { item = '├' },
+    },
     icons = {
       -- devicons glyphs need a Nerd Font, which Terminal.app and Termius lack;
       -- only the git column stays on, and it is plain ASCII
