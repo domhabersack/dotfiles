@@ -75,8 +75,11 @@ set number
 " always show current position
 set ruler
 
-" show gutter after column 120
-set colorcolumn=121
+" show gutter one column past 'textwidth' (defaults to 120, but Neovim's
+" built-in editorconfig support overrides 'textwidth' per-directory from
+" max_line_length, so the gutter follows nearby .editorconfig files)
+set textwidth=120
+set colorcolumn=+1
 
 " highlight current line
 set cursorline
@@ -113,8 +116,9 @@ set ignorecase
 set autoread
 autocmd FocusGained,BufEnter,CursorHold,CursorHoldI * if mode() != 'c' | checktime | endif
 
-" do not auto-insert comments
-autocmd FileType * setlocal formatoptions-=c formatoptions-=r formatoptions-=o
+" do not auto-insert comments, and do not auto-wrap text at 'textwidth'
+" (textwidth is used to drive colorcolumn=+1, not to break lines while typing)
+autocmd FileType * setlocal formatoptions-=c formatoptions-=r formatoptions-=o formatoptions-=t
 
 " color status bar when in insert mode
 function! InsertStatuslineColor(mode)
