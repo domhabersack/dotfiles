@@ -190,15 +190,20 @@ set updatetime=100
 if has('nvim')
   nnoremap <C-n> :NvimTreeToggle<CR>
 lua << EOF
--- nvim-tree wants netrw gone; builtin plugins load after the vimrc, so here is early enough
+-- Only replace netrw once nvim-tree is actually loadable. Disabling it
+-- unconditionally would leave a machine that has not run :PlugInstall yet with
+-- no file explorer at all, which is worse than the netrw it replaced.
+local ok, nvim_tree = pcall(require, 'nvim-tree')
+if ok then
+
+-- safe here rather than at the top of the file: builtin plugins, netrw among
+-- them, are sourced only after the whole vimrc has run
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
-require('nvim-tree').setup({
+nvim_tree.setup({
   view = { width = 48 },
   update_focused_file = { enable = true },
-  filesystem_watchers = { enable = true }, -- live refresh, incl. git column
-  git = { enable = true },
   filters = { custom = { '^\\.git$' } },   -- dotfiles stay visible, .git itself does not
   renderer = {
     add_trailing = true,                   -- trailing "/" marks directories
@@ -213,16 +218,25 @@ require('nvim-tree').setup({
       -- only the git column stays on, and it is plain ASCII
       show = { file = false, folder = false, folder_arrow = true, git = true },
       git_placement = 'right_align',       -- keeps "~" off the front, where it reads as $HOME
+      symlink_arrow = ' -> ',              -- default is ➛ (U+279B), absent from Menlo/SF Mono
       glyphs = {
         folder = { arrow_closed = '>', arrow_open = 'v' },
+        -- "m" in the tree toggles a bookmark, and vim-signature makes that an
+        -- easy misfire; the default glyph is a Nerd Font private-use codepoint
+        -- that would sit in the signcolumn as an unidentifiable box
+        bookmark = '*',
         git = {
           untracked = '?', unstaged = '~', staged  = '+',
-          renamed   = '>', unmerged = '!', deleted = '-', ignored = ' ',
+          -- no blanks: under right_align every glyph is virtual text painted
+          -- over the line, so " " would erase the end of the filename
+          renamed   = '>', unmerged = '!', deleted = '-', ignored = '.',
         },
       },
     },
   },
 })
+
+end
 EOF
 else
   let g:NERDTreeWinSize = 48
