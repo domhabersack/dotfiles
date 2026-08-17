@@ -19,7 +19,12 @@ endif
 call plug#begin()
 
 " UI / navigation
-Plug 'preservim/nerdtree'
+if has('nvim')
+  " no nvim-web-devicons: its glyphs need a Nerd Font, so the tree renders ASCII instead
+  Plug 'nvim-tree/nvim-tree.lua'
+else
+  Plug 'preservim/nerdtree'
+endif
 Plug 'airblade/vim-gitgutter'
 Plug 'myusuf3/numbers.vim'
 Plug 'kshenoy/vim-signature'
@@ -179,18 +184,52 @@ set updatetime=100
 
 
 """"""""""""""""""""""""""""""""
-" NERDTree
+" File tree
 """"""""""""""""""""""""""""""""
 
-let g:NERDTreeWinSize = 48
-map <C-n> :NERDTreeToggle<CR>
+if has('nvim')
+  nnoremap <C-n> :NvimTreeToggle<CR>
+lua << EOF
+-- nvim-tree wants netrw gone; builtin plugins load after the vimrc, so here is early enough
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
+
+require('nvim-tree').setup({
+  view = { width = 48 },
+  update_focused_file = { enable = true },
+  filesystem_watchers = { enable = true }, -- live refresh, incl. git column
+  git = { enable = true },
+  filters = { custom = { '^\\.git$' } },   -- dotfiles stay visible, .git itself does not
+  renderer = {
+    add_trailing = true,                   -- trailing "/" marks directories
+    indent_markers = { enable = true },
+    icons = {
+      -- devicons glyphs need a Nerd Font, which Terminal.app and Termius lack;
+      -- only the git column stays on, and it is plain ASCII
+      show = { file = false, folder = false, folder_arrow = true, git = true },
+      git_placement = 'right_align',       -- keeps "~" off the front, where it reads as $HOME
+      glyphs = {
+        folder = { arrow_closed = '>', arrow_open = 'v' },
+        git = {
+          untracked = '?', unstaged = '~', staged  = '+',
+          renamed   = '>', unmerged = '!', deleted = '-', ignored = ' ',
+        },
+      },
+    },
+  },
+})
+EOF
+else
+  let g:NERDTreeWinSize = 48
+  map <C-n> :NERDTreeToggle<CR>
+endif
 
 
 """"""""""""""""""""""""""""""""
 " numbers.vim
 """"""""""""""""""""""""""""""""
 
-let g:numbers_exclude = ['nerdtree']
+let g:numbers_exclude = ['nerdtree', 'NvimTree']
 nnoremap <F3> :NumbersToggle<CR>
 
 
