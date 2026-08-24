@@ -141,7 +141,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 3 2 1 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[bold]3 PRs#[nobold] (#[fg=colour6]2#[default] human, #[fg=colour6]1#[default] bot) · no known vulnerabilities')
+  expected=$(printf '#[range=user|repo_pr]#[bold]3 PRs#[nobold] (#[fg=colour6]2#[default] human, #[fg=colour6]1#[default] bot)#[norange] · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -152,7 +152,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 1 1 0 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[bold]1 PR#[nobold] (all human) · no known vulnerabilities')
+  expected=$(printf '#[range=user|repo_pr]#[bold]1 PR#[nobold] (all human)#[norange] · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -163,7 +163,7 @@ write_cache() {
   write_cache example-owner/example-repo ok 2 0 2 ok 0 0 0
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf '#[bold]2 PRs#[nobold] (all bot) · no known vulnerabilities')
+  expected=$(printf '#[range=user|repo_pr]#[bold]2 PRs#[nobold] (all bot)#[norange] · no known vulnerabilities')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
