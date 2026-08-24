@@ -144,7 +144,7 @@ write_cache() {
     '{"status":"ok","has":true,"number":42,"commits":12,"additions":120,"deletions":30,"changed":3,"draft":false,"review":"APPROVED","checks_state":"SUCCESS","checks_total":4,"checks_skipped":0,"unresolved":2,"fetched_at":0}'
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf 'PR ##42 · 12 commits · 3 files · #[fg=colour2]+120#[default] #[fg=colour1]-30#[default] · #[fg=colour2]all checks have passed#[default] · #[fg=colour2]approved#[default] · #[fg=colour3]2 unresolved#[default]')
+  expected=$(printf '#[range=user|branch_pr]PR ##42#[norange] · 12 commits · 3 files · #[fg=colour2]+120#[default] #[fg=colour1]-30#[default] · #[fg=colour2]all checks have passed#[default] · #[fg=colour2]approved#[default] · #[fg=colour3]2 unresolved#[default]')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -155,7 +155,7 @@ write_cache() {
     '{"status":"ok","has":true,"number":7,"commits":1,"additions":5,"deletions":0,"changed":1,"draft":false,"review":"","checks_state":"SUCCESS","checks_total":1,"checks_skipped":0,"unresolved":0,"fetched_at":0}'
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf 'PR ##7 · 1 commit · 1 file · #[fg=colour2]+5#[default] #[fg=colour1]-0#[default] · #[fg=colour2]all checks have passed#[default]')
+  expected=$(printf '#[range=user|branch_pr]PR ##7#[norange] · 1 commit · 1 file · #[fg=colour2]+5#[default] #[fg=colour1]-0#[default] · #[fg=colour2]all checks have passed#[default]')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 
@@ -230,7 +230,7 @@ write_cache() {
     '{"status":"ok","has":true,"number":9,"commits":4,"additions":1,"deletions":1,"changed":1,"draft":false,"review":"REVIEW_REQUIRED","checks_state":"SUCCESS","checks_total":3,"checks_skipped":0,"unresolved":0,"fetched_at":0}'
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  expected=$(printf 'PR ##9 · 4 commits · 1 file · #[fg=colour2]+1#[default] #[fg=colour1]-1#[default] · #[fg=colour2]all checks have passed#[default]')
+  expected=$(printf '#[range=user|branch_pr]PR ##9#[norange] · 4 commits · 1 file · #[fg=colour2]+1#[default] #[fg=colour1]-1#[default] · #[fg=colour2]all checks have passed#[default]')
   [ "$(captured_for '@1')" = "$expected" ]
 }
 

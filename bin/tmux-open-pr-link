@@ -1,0 +1,51 @@
+#!/bin/sh
+# Opens a PR-related GitHub page in the browser for a click on one of the
+# range=user marked segments set by bin/tmux-branch-pr ("branch_pr") or
+# bin/tmux-repo-pr ("repo_pr") — see the MouseDown1Status binding in
+# tmux.conf, which passes #{mouse_status_range} as $1. Any other value
+# (a click outside both ranges) is a silent no-op.
+#
+# Resolution mirrors bin/tmux-branch-pr / bin/tmux-repo-pr: both rows only
+# ever show the active window's repo/branch, so the client's current pane
+# (no -t needed) is always the right one to resolve against.
+#
+# Usage: tmux-open-pr-link <branch_pr|repo_pr>
+set -eu
+
+range=${1:-}
+[ -n "$range" ] || exit 0
+
+path=$(tmux display-message -p '#{pane_current_path}') || exit 0
+
+# owner/repo for the git repo at $1, or nothing (nonzero exit) if $1 isn't
+# inside a git repo, has no "origin" remote, or the remote doesn't parse into
+# a clean owner/repo. Same rule as bin/tmux-repo-pr / bin/tmux-branch-pr.
+resolve_repo() {
+  git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
+  url=$(git -C "$1" remote get-url origin 2>/dev/null) || return 1
+  [ -n "$url" ] || return 1
+  repo=$(printf '%s' "$url" \
+    | sed -E 's#^[a-zA-Z]+://##; s#^[^@]*@##; s#^[^:/]+[:/]##; s#\.git$##')
+  case "$repo" in
+    */*) printf '%s\n' "$repo" ;;
+    *)   return 1 ;;
+  esac
+}
+
+repo=$(resolve_repo "$path") || exit 0
+
+case "$range" in
+  branch_pr)
+    branch=$(git -C "$path" symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
+    safe=$(printf '%s' "$repo/$branch" | tr '/' '_')
+    cache_file="$HOME/.cache/tmux-branch-pr/$safe.json"
+    [ -f "$cache_file" ] || exit 0
+    number=$(jq -r '.number // empty' "$cache_file" 2>/dev/null) || exit 0
+    [ -n "$number" ] || exit 0
+    open "https://github.com/$repo/pull/$number"
+    ;;
+  repo_pr)
+    open "https://github.com/$repo/pulls"
+    ;;
+  *) exit 0 ;;
+esac
