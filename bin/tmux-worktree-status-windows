@@ -3,7 +3,7 @@
 # bin/tmux-worktree-status) from its active pane’s path -- so status-format[1]
 # and the choose-tree format (prefix w) can show "repo ⑂feat/foo" (branch
 # prefixed with the fork glyph) for a window sitting in a linked worktree,
-# or "repo ✂2 main" on the main worktree’s window when other worktrees of
+# or "repo ⑂2 main" on the main worktree’s window when other worktrees of
 # that repo still exist.
 #
 # This covers ALL windows, mirroring bin/tmux-git-branch-windows exactly

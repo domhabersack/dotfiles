@@ -247,7 +247,7 @@ on the same events as the branch label, so a window that ends up in a
 worktree by hand -- a plain `cd`, not through `git-worktree-new` -- still
 gets it, and a repo submodule’s own worktree is never mistaken for its
 superproject’s. The repo’s own **main** worktree window separately gets a
-dim `✂N` right after its name while N of its worktrees are still checked
+dim `⑂N` right after its name while N of its worktrees are still checked
 out and not yet cleaned up with `git worktree remove` -- counting a
 `prunable` one the same as a live one, since that’s exactly the “not
 cleaned up yet” case this marker exists to surface.

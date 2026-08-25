@@ -34,7 +34,7 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
   GIT worktree add -q -b feature-a "$REPO/.worktrees/feature-a"
   GIT worktree add -q -b feature-b "$REPO/.worktrees/feature-b"
   [ -z "$(here_of "$REPO")" ]
-  [ "$(pending_of "$REPO")" = "✂2" ]
+  [ "$(pending_of "$REPO")" = "⑂2" ]
 }
 
 @test "shows no pending marker on the main worktree when no linked worktrees exist" {
@@ -45,7 +45,7 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
 @test "a prunable worktree (directory deleted, not yet removed) still counts toward pending" {
   GIT worktree add -q -b feature "$REPO/.worktrees/feature"
   rm -rf "$REPO/.worktrees/feature"
-  [ "$(pending_of "$REPO")" = "✂1" ]
+  [ "$(pending_of "$REPO")" = "⑂1" ]
 }
 
 @test "resolves correctly for a submodule (gitdir relocated, but core.worktree recorded)" {
@@ -57,7 +57,7 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
   child="$REPO/libs/child"
   git -C "$child" worktree add -q -b feature "$child/.worktrees/feature"
   [ -z "$(here_of "$child")" ]
-  [ "$(pending_of "$child")" = "✂1" ]
+  [ "$(pending_of "$child")" = "⑂1" ]
   [ "$(here_of "$child/.worktrees/feature")" = "⑂" ]
 }
 

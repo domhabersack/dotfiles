@@ -5,7 +5,7 @@
 #   line 1 (@worktree_here)    "⑂" when $1 sits inside a LINKED worktree of
 #                              its repo, empty otherwise (including when $1
 #                              isn’t a repo at all, or sits in the main one).
-#   line 2 (@worktree_pending) "✂N" when $1 sits inside the MAIN worktree
+#   line 2 (@worktree_pending) "⑂N" when $1 sits inside the MAIN worktree
 #                              and N other worktrees of that repo still exist
 #                              (created by `git-worktree-new`, not yet
 #                              cleaned up with `git worktree remove`), empty
@@ -44,7 +44,7 @@ here=""
 pending=""
 if [ -n "$toplevel" ]; then
   if [ -n "$main_root" ] && [ "$toplevel" = "$main_root" ]; then
-    [ "$other_count" -gt 0 ] && pending="✂$other_count"
+    [ "$other_count" -gt 0 ] && pending="⑂$other_count"
   else
     here="⑂"
   fi
