@@ -15,7 +15,7 @@
 # The output carries no tmux #[...] style tags and no surrounding
 # parentheses: each caller dims it with its own color (the status line,
 # choose-tree) and, when the window sits in a linked git worktree, prefixes
-# it with a ⑂ instead (see "Window worktree status" in tmux.conf) -- keeping
+# it with a ⎇ instead (see "Window worktree status" in tmux.conf) -- keeping
 # the bare branch name here also keeps this usable as a plain string from
 # any shell context.
 set -eu

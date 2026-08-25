@@ -26,7 +26,7 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
 
 @test "marks a linked worktree with the fork glyph, no pending marker" {
   GIT worktree add -q -b feature "$REPO/.worktrees/feature"
-  [ "$(here_of "$REPO/.worktrees/feature")" = "⑂" ]
+  [ "$(here_of "$REPO/.worktrees/feature")" = "⎇" ]
   [ -z "$(pending_of "$REPO/.worktrees/feature")" ]
 }
 
@@ -34,7 +34,7 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
   GIT worktree add -q -b feature-a "$REPO/.worktrees/feature-a"
   GIT worktree add -q -b feature-b "$REPO/.worktrees/feature-b"
   [ -z "$(here_of "$REPO")" ]
-  [ "$(pending_of "$REPO")" = "⑂2" ]
+  [ "$(pending_of "$REPO")" = "⎇2" ]
 }
 
 @test "shows no pending marker on the main worktree when no linked worktrees exist" {
@@ -45,7 +45,7 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
 @test "a prunable worktree (directory deleted, not yet removed) still counts toward pending" {
   GIT worktree add -q -b feature "$REPO/.worktrees/feature"
   rm -rf "$REPO/.worktrees/feature"
-  [ "$(pending_of "$REPO")" = "⑂1" ]
+  [ "$(pending_of "$REPO")" = "⎇1" ]
 }
 
 @test "resolves correctly for a submodule (gitdir relocated, but core.worktree recorded)" {
@@ -57,8 +57,8 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
   child="$REPO/libs/child"
   git -C "$child" worktree add -q -b feature "$child/.worktrees/feature"
   [ -z "$(here_of "$child")" ]
-  [ "$(pending_of "$child")" = "⑂1" ]
-  [ "$(here_of "$child/.worktrees/feature")" = "⑂" ]
+  [ "$(pending_of "$child")" = "⎇1" ]
+  [ "$(here_of "$child/.worktrees/feature")" = "⎇" ]
 }
 
 @test "degrades safely (mislabels rather than errors) for --separate-git-dir with no core.worktree" {
@@ -67,7 +67,7 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
   # back to a working directory -- nothing rules out several working
   # directories pointing at the same external gitdir. This script treats
   # that failure as "not resolvably the main worktree", so it mislabels the
-  # main worktree here as if it were linked (⑂) instead of showing a pending
+  # main worktree here as if it were linked (⎇) instead of showing a pending
   # count -- documented as a known, narrow limitation, not a crash.
   gitdir="$BATS_TEST_TMPDIR/external-gitdir"
   REPO2="$BATS_TEST_TMPDIR/repo2"
@@ -75,5 +75,5 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
   git -C "$REPO2" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q -m init --allow-empty
   run "$SCRIPT" "$REPO2"
   [ "$status" -eq 0 ]
-  [ "$(here_of "$REPO2")" = "⑂" ]
+  [ "$(here_of "$REPO2")" = "⎇" ]
 }

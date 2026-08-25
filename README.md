@@ -203,8 +203,8 @@ branch reads `codeshots feat/foo` and stands out, while a window on the
 trunk stays a plain `codeshots`. The trunk is the default, so labelling it
 on every window is noise; hiding it makes the windows doing feature work
 the ones that draw the eye. When that window sits in a **linked** git
-worktree (see below), the branch is further prefixed with a `⑂`, e.g.
-`dotfiles ⑂feat/foo` -- git refuses to check the same branch out in two
+worktree (see below), the branch is further prefixed with a `⎇`, e.g.
+`dotfiles ⎇feat/foo` -- git refuses to check the same branch out in two
 worktrees at once, so a window showing plain `main` can never itself be
 one. A window whose pane isn’t in a git repo at all -- a scratch or utility
 window -- has its **name italicized** instead, so non-repo windows read as
@@ -213,7 +213,7 @@ signal; italics needs a terminal whose font has an italic face, and shows
 upright where it can’t render). `bin/tmux-git-branch` resolves the bare
 label for a directory (the current branch, or the short commit hash on a
 detached HEAD, or nothing outside a work tree, with no parentheses of its
-own any more -- each caller dims it and, when relevant, adds the `⑂`);
+own any more -- each caller dims it and, when relevant, adds the `⎇`);
 `bin/tmux-git-branch-windows` stamps every window’s `@git_branch` from its
 active pane’s path, refreshed on window create/rename/select and by
 `bin/tmux-git-branch-watch` on a timer -- the timer is what catches a
@@ -241,13 +241,13 @@ nothing. `.worktrees/` is ignored via `~/.gitignore_global` rather than a
 per-repo `.gitignore`, so it never needs committing to any repo it’s used in.
 
 Every worktree window is named plainly after the repo, same as an ordinary
-window -- the `⑂` prefix above is what makes the connection obvious instead,
+window -- the `⎇` prefix above is what makes the connection obvious instead,
 recomputed live from each window’s pane path (`bin/tmux-worktree-status`)
 on the same events as the branch label, so a window that ends up in a
 worktree by hand -- a plain `cd`, not through `git-worktree-new` -- still
 gets it, and a repo submodule’s own worktree is never mistaken for its
 superproject’s. The repo’s own **main** worktree window separately gets a
-dim `⑂N` right after its name while N of its worktrees are still checked
+dim `⎇N` right after its name while N of its worktrees are still checked
 out and not yet cleaned up with `git worktree remove` -- counting a
 `prunable` one the same as a live one, since that’s exactly the “not
 cleaned up yet” case this marker exists to surface.

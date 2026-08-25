@@ -22,7 +22,7 @@
 # a bare repo), and because the popup tears down the instant its command
 # exits (`display-popup -E`), picking one would silently do nothing with no
 # visible error at all. A prunable entry is exactly the "not cleaned up yet"
-# case bin/tmux-worktree-status’s ⑂ marker exists to surface on the main
+# case bin/tmux-worktree-status’s ⎇ marker exists to surface on the main
 # worktree’s window instead -- this list only ever offers reachable targets.
 set -eu
 
