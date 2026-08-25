@@ -281,6 +281,30 @@ md() {
   mkdir -p -- "$1" && cd -- "$1"
 }
 
+# create a new git worktree for the current repo, named the same as its
+# branch (see bin/git-worktree-add), and jump to it: hand off to tmux’s
+# window-switch logic if inside tmux (bin/tmux-worktree-switch), else cd
+# directly -- a script can’t cd its caller, which is why this half has to
+# live here rather than in bin/.
+#
+# Local var is `wt_path`, not `path` -- zsh ties the special parameter `path`
+# to `$PATH` even as a `local`, so assigning a plain string to it clobbers
+# PATH for the rest of this function (and everything it shells out to,
+# including tmux-worktree-switch below) until the function returns.
+git-worktree-new() {
+  if [[ -z "$1" ]]; then
+    echo "usage: git-worktree-new <name>" >&2
+    return 1
+  fi
+  local wt_path
+  wt_path=$(~/.dotfiles/bin/git-worktree-add "$1") || return $?
+  if [[ -n "$TMUX" ]]; then
+    ~/.dotfiles/bin/tmux-worktree-switch "$wt_path"
+  else
+    cd -- "$wt_path"
+  fi
+}
+
 
 ################
 # ALIASES      #

@@ -1,0 +1,24 @@
+#!/bin/sh
+# Background ticker that re-stamps every window’s @worktree_here/
+# @worktree_pending on a fixed interval, so a `git worktree add`/`remove` run
+# from a window you then stay in (or from outside tmux entirely) updates even
+# though no window event (new/rename/select) fired to re-run
+# bin/tmux-worktree-status-windows. Navigating between windows updates
+# instantly via the hooks; this only backstops the "sat still while the
+# worktree set changed" case, so a coarse interval is plenty. Mirrors
+# bin/tmux-git-branch-watch exactly. Single-instance guarded: safe to call on
+# every config reload.
+
+PIDFILE=/tmp/tmux-worktree-status-watch.pid
+INTERVAL=30
+
+# Reuse the running ticker if it is still alive.
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  exit 0
+fi
+
+nohup sh -c \
+  'while :; do ~/.dotfiles/bin/tmux-worktree-status-windows; sleep '"$INTERVAL"'; done' \
+  >/dev/null 2>&1 &
+
+echo $! > "$PIDFILE"

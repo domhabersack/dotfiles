@@ -1,0 +1,48 @@
+#!/bin/sh
+# One line per worktree of the CURRENT repo (the repo containing $PWD -- set
+# by the popup’s -d "#{pane_current_path}" -- so this is scoped to one repo,
+# not global). Backs bin/tmux-worktree-popup.
+#
+#   display US path
+#
+# display  "* " (this worktree) or "  ", then the branch name (or
+#          "(detached)"), padded -- fzf’s visible column
+# path     absolute worktree path -- the hidden field the popup extracts
+#          after a selection
+#
+# git worktree list --porcelain has NO "current worktree" marker of its own
+# (verified); "current" is computed here by comparing each worktree’s path
+# against --show-toplevel from $PWD, which is why this must run from the
+# popup’s own cwd rather than taking a path argument.
+#
+# A `bare` main worktree and a `prunable` linked one (directory deleted but
+# not yet removed with `git worktree remove`) are both left out entirely --
+# neither is something you can actually switch to (bin/tmux-worktree-switch
+# would just fail: `cd` into a missing directory, or `--show-toplevel` inside
+# a bare repo), and because the popup tears down the instant its command
+# exits (`display-popup -E`), picking one would silently do nothing with no
+# visible error at all. A prunable entry is exactly the "not cleaned up yet"
+# case bin/tmux-worktree-status’s ✂ marker exists to surface on the main
+# worktree’s window instead -- this list only ever offers reachable targets.
+set -eu
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+current=$(git rev-parse --show-toplevel)
+us=$(printf '\037')
+
+git worktree list --porcelain | awk -v RS='' -v FS='\n' -v us="$us" -v current="$current" '
+{
+  path = ""; branch = ""; skip = 0
+  for (i = 1; i <= NF; i++) {
+    line = $i
+    if (line ~ /^worktree /)      path = substr(line, 10)
+    else if (line ~ /^branch /) { b = substr(line, 8); sub(/^refs\/heads\//, "", b); branch = b }
+    else if (line == "detached")  branch = "(detached)"
+    else if (line == "bare")      skip = 1
+    else if (line ~ /^prunable/)  skip = 1
+  }
+  if (skip || path == "") next
+  marker = (path == current) ? "* " : "  "
+  label  = (branch == "") ? "(detached)" : branch
+  printf "%s%-24s%s%s\n", marker, label, us, path
+}'
