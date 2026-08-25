@@ -204,7 +204,7 @@ trunk stays a plain `codeshots`. The trunk is the default, so labelling it
 on every window is noise; hiding it makes the windows doing feature work
 the ones that draw the eye. When that window sits in a **linked** git
 worktree (see below), the branch is further prefixed with a `⎇`, e.g.
-`dotfiles ⎇feat/foo` -- git refuses to check the same branch out in two
+`dotfiles ⎇ feat/foo` -- git refuses to check the same branch out in two
 worktrees at once, so a window showing plain `main` can never itself be
 one. A window whose pane isn’t in a git repo at all -- a scratch or utility
 window -- has its **name italicized** instead, so non-repo windows read as
@@ -247,7 +247,7 @@ on the same events as the branch label, so a window that ends up in a
 worktree by hand -- a plain `cd`, not through `git-worktree-new` -- still
 gets it, and a repo submodule’s own worktree is never mistaken for its
 superproject’s. The repo’s own **main** worktree window separately gets a
-dim `⎇N` right after its name while N of its worktrees are still checked
+dim `⎇ N` right after its name while N of its worktrees are still checked
 out and not yet cleaned up with `git worktree remove` -- counting a
 `prunable` one the same as a live one, since that’s exactly the “not
 cleaned up yet” case this marker exists to surface.
