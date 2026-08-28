@@ -339,6 +339,11 @@ alias grbc='git add . && git rebase --continue'
 alias grbs='git rebase --skip'
 alias gst='git status -s'
 
+# shorthand for the git-worktree-new function (FUNCTIONS section above) --
+# a plain alias, not a wrapper, so `gwt <name>` forwards straight to it and
+# every argument still binds to $1 exactly as calling the function directly
+alias gwt='git-worktree-new'
+
 # do not allow scripts to automatically delete things for you
 alias rm='rm -i'
 
