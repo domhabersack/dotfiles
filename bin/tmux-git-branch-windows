@@ -1,9 +1,9 @@
 #!/bin/sh
-# Stamps every window with @git_branch: a "(branch)" label (see
+# Stamps every window with @git_branch: a bare branch label (see
 # bin/tmux-git-branch) for the git repository its active pane sits in, or the
 # empty string when that pane isn't in a repo. The choose-tree window format
 # (prefix w) prints #{@git_branch} right after the window name, so a repo
-# window reads "codeshots (main)" while a plain-directory window stays
+# window reads "codeshots main" while a plain-directory window stays
 # "dotfiles".
 #
 # This covers ALL windows, which is why it exists as its own pass: the status

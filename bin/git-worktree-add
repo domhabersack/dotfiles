@@ -1,0 +1,51 @@
+#!/bin/sh
+# Creates a new git worktree for the repo the caller is standing in (any
+# worktree of it, not just the main one -- see root resolution below), off a
+# new branch of the same name, and prints ONLY the resulting absolute path to
+# stdout on success (same plain-string convention as bin/tmux-git-branch).
+#
+# Root resolution is bin/git-worktree-root -- see that script for why a
+# submodule or a `git init --separate-git-dir=<dir>` repo needs more than
+# stripping a trailing "/.git" off --git-common-dir.
+#
+# Base branch: local `main` first (the common case), then the remote’s
+# default branch via the locally-recorded refs/remotes/origin/HEAD symref
+# (set by `git clone`, or manually via `git remote set-head origin -a`) --
+# never a live network call, consistent with every other script here being
+# offline-safe by default. The fallback keeps the "origin/" prefix
+# (`${ref#refs/remotes/}`, not `${ref#refs/remotes/origin/}`): passing the
+# bare branch name (e.g. "develop") to `git worktree add -b <name> <path>
+# develop` lets git’s remote-DWIM resolve it instead of failing outright --
+# DWIM wins over the requested -b name, silently creating a local "develop"
+# tracking branch and leaving the requested <name> branch never created at
+# all. "origin/develop" is unambiguous: git resolves it as the remote-tracking
+# branch, no DWIM involved.
+set -eu
+
+name=${1:?usage: git-worktree-add <name>}
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+  echo "git-worktree-add: not inside a git repository" >&2
+  exit 1
+}
+
+root=$("$(dirname "$0")/git-worktree-root")
+
+base=""
+if git -C "$root" show-ref --verify --quiet refs/heads/main; then
+  base=main
+else
+  ref=$(git -C "$root" symbolic-ref --quiet refs/remotes/origin/HEAD 2>/dev/null) || ref=""
+  base=${ref#refs/remotes/}
+fi
+
+if [ -z "$base" ]; then
+  echo "git-worktree-add: no local 'main' branch and no origin/HEAD default branch found" >&2
+  echo "git-worktree-add: run 'git remote set-head origin -a' to record origin's default branch" >&2
+  exit 1
+fi
+
+worktree_path="$root/.worktrees/$name"
+git -C "$root" worktree add -b "$name" "$worktree_path" "$base" >&2
+
+printf '%s\n' "$worktree_path"

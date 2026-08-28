@@ -1,0 +1,38 @@
+#!/bin/sh
+# Interactive tmux popup bound to `prefix + W` (see tmux.conf): an fzf list of
+# every worktree of the CURRENT repo (bin/tmux-worktree-feed), enter hands off
+# to bin/tmux-worktree-switch to jump to (or create) that worktree’s window.
+# Same fzf-resolve-with-less-fallback shape as bin/tmux-shortcuts-popup: the
+# lookup happens here, inside the popup’s own non-interactive/non-login
+# shell, since that shell’s PATH is not the interactive PATH fzf normally
+# lives on. Without fzf, the popup is read-only (no selection possible) --
+# an accepted limitation, same as tmux-shortcuts-popup’s own fallback.
+set -eu
+
+bindir=$(dirname "$0")
+feed="$bindir/tmux-worktree-feed"
+switch="$bindir/tmux-worktree-switch"
+us=$(printf '\037')
+
+fzf=""
+if command -v fzf >/dev/null 2>&1; then
+  fzf=$(command -v fzf)
+elif [ -x "$HOME/.fzf/bin/fzf" ]; then
+  fzf="$HOME/.fzf/bin/fzf"
+fi
+
+if [ -z "$fzf" ]; then
+  "$feed" | awk -F "$us" '{print $1}' | less -R
+  exit 0
+fi
+
+sel=$("$feed" | "$fzf" \
+  --ansi --delimiter="$us" --with-nth=1 --no-sort \
+  --layout=reverse --header-first \
+  --prompt='worktree> ' --info=inline-right \
+  --header='enter: switch · esc: close' \
+  --bind='esc:abort') || exit 0
+
+path=$(printf '%s' "$sel" | awk -F "$us" '{print $2}')
+[ -n "$path" ] || exit 0
+exec "$switch" "$path"

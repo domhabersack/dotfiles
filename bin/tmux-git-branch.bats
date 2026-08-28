@@ -26,13 +26,13 @@ commit() {
   [ -z "$output" ]
 }
 
-@test "prints the current branch in parentheses" {
+@test "prints the current branch, bare" {
   git init -q "$REPO"
   commit init
   GIT checkout -q -b feature/login
   run "$SCRIPT" "$REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = "(feature/login)" ]
+  [ "$output" = "feature/login" ]
 }
 
 @test "falls back to the short hash on a detached HEAD" {
@@ -42,7 +42,7 @@ commit() {
   sha=$(GIT rev-parse --short HEAD)
   run "$SCRIPT" "$REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = "($sha)" ]
+  [ "$output" = "$sha" ]
 }
 
 @test "shows the unborn branch in a repo with no commits yet" {
@@ -52,7 +52,7 @@ commit() {
   GIT symbolic-ref HEAD refs/heads/main
   run "$SCRIPT" "$REPO"
   [ "$status" -eq 0 ]
-  [ "$output" = "(main)" ]
+  [ "$output" = "main" ]
 }
 
 @test "defaults to the current directory when given no argument" {
@@ -61,5 +61,5 @@ commit() {
   GIT checkout -q -b topic
   run sh -c "cd '$REPO' && '$SCRIPT'"
   [ "$status" -eq 0 ]
-  [ "$output" = "(topic)" ]
+  [ "$output" = "topic" ]
 }

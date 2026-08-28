@@ -1,0 +1,38 @@
+#!/bin/sh
+# Stamps every window with @worktree_here and @worktree_pending (see
+# bin/tmux-worktree-status) from its active pane’s path -- so status-format[1]
+# and the choose-tree format (prefix w) can show "repo ⎇ feat/foo" (branch
+# prefixed with the fork glyph) for a window sitting in a linked worktree,
+# or "repo ⎇ 2 main" on the main worktree’s window when other worktrees of
+# that repo still exist.
+#
+# This covers ALL windows, mirroring bin/tmux-git-branch-windows exactly
+# (including why it exists as its own pass rather than only updating the
+# active window): re-run on window create/rename/select and session change
+# (hooks in tmux.conf) for instant updates as you navigate, plus a slow
+# ticker (bin/tmux-worktree-status-watch) that catches a `git worktree
+# add`/`remove` run from a window you then sit still in, with no window
+# event to trigger a refresh.
+set -eu
+
+STATUS="$HOME/.dotfiles/bin/tmux-worktree-status"
+
+# pane_current_path is the loop’s LAST field so a path containing spaces stays
+# intact; window_id never contains spaces.
+tmux list-windows -a -F '#{window_id} #{pane_current_path}' |
+while read -r wid path; do
+  if [ -n "$path" ]; then
+    out=$("$STATUS" "$path" 2>/dev/null) || out=''
+  else
+    # No path (e.g. a window caught mid-teardown): clear rather than resolve,
+    # since an empty arg would make the helper inspect its own cwd instead.
+    out=''
+  fi
+  here=$(printf '%s\n' "$out" | sed -n '1p')
+  pending=$(printf '%s\n' "$out" | sed -n '2p')
+  tmux set-window-option -t "$wid" @worktree_here "$here"
+  tmux set-window-option -t "$wid" @worktree_pending "$pending"
+done
+
+# Repaint so freshly-set labels show immediately, not on the next tick.
+tmux refresh-client -S 2>/dev/null
