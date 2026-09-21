@@ -4,8 +4,17 @@
 SCRIPT="$BATS_TEST_DIRNAME/tmux-sort-windows"
 
 setup() {
+  # The script sources tmux-locklib and shells out to tmux-window-slug by
+  # absolute $HOME path, so fake $HOME and copy both in -- otherwise they
+  # resolve to the author's real checkout, which only exists locally.
+  # tmux-freshness-windows needs no stub: it's reached via `tmux run-shell`,
+  # which the mock below swallows.
+  export HOME="$BATS_TEST_TMPDIR/home"
   export MOCK_DIR="$BATS_TEST_TMPDIR/mock"
-  mkdir -p "$MOCK_DIR/bin"
+  mkdir -p "$HOME/.dotfiles/bin" "$MOCK_DIR/bin"
+
+  cp "$BATS_TEST_DIRNAME/tmux-locklib" "$HOME/.dotfiles/bin/tmux-locklib"
+  cp "$BATS_TEST_DIRNAME/tmux-window-slug" "$HOME/.dotfiles/bin/tmux-window-slug"
 
   # Mock tmux: window state is "index TAB name TAB worktree_here" lines in
   # $MOCK_DIR/windows. move-window -s/-t relocates one window's index;
