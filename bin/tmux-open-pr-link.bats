@@ -106,7 +106,10 @@ write_branch_pr_cache() {
 
 @test "branch_pr does nothing on a detached HEAD" {
   make_repo "$BATS_TEST_TMPDIR/repo"
-  git -C "$BATS_TEST_TMPDIR/repo" commit -q --allow-empty -m init
+  # Identity passed inline so the suite never depends on (or mutates) the
+  # runner's global git config; CI has no gecos name to fall back on.
+  git -C "$BATS_TEST_TMPDIR/repo" -c user.name=t -c user.email=t@t \
+    -c commit.gpgsign=false commit -q --allow-empty -m init
   rev=$(git -C "$BATS_TEST_TMPDIR/repo" rev-parse HEAD)
   git -C "$BATS_TEST_TMPDIR/repo" checkout -q "$rev"
   PANE_PATH="$BATS_TEST_TMPDIR/repo" run "$SCRIPT" branch_pr
