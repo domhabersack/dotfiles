@@ -229,10 +229,19 @@ rule):
 2. **Branch PR** (`status-format[2]`, from `@branch_pr`) — the open pull request
    whose head *is* the current branch, if one exists: its number, commit count,
    diff size, checks, review state, and unresolved conversations. This is "open work"
-   visibility — the state of the PR the window in front of you is producing.
+   visibility — the state of the PR the window in front of you is producing. The
+   `PR #42` (or `PR #42 (draft)`) part of the row is a click target — see below.
 3. **Repo health** (`@repo_pr`, from `status-left`) — that repo's open-PR and
    Dependabot-vulnerability *counts* across the whole repo, kept off the name so
-   it doesn't crowd it.
+   it doesn't crowd it. The `N PRs (...)` part is a click target too, whenever
+   there's at least one open PR.
+
+Clicking either PR click target opens the relevant page on GitHub in the
+default browser (`bin/tmux-open-pr-link`, bound to `MouseDown1Status` in
+`tmux.conf`): the branch-PR number opens that specific pull request, the
+repo-health count opens the repo's pull-requests listing. Both rely on
+tmux's `#[range=user|...]` status-format marker, which fires regardless of
+which status row the marked text ends up on.
 
 The branch-PR and health rows are independent axes and each shows only when it
 has something; the branch-PR row sits above the health row, so when there's no

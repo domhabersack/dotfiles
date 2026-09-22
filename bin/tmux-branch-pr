@@ -129,11 +129,14 @@ while read -r attached active wid path; do
     commits_label=commits
     [ "$commits" -eq 1 ] && commits_label=commit
     diff="#[fg=colour2]+$additions#[default] #[fg=colour1]-$deletions#[default]"
-    parts="PR ##$number"
+    # Only "PR #42 (draft)" is the click target (see bin/tmux-open-pr-link) —
+    # the rest of the row is detail text, not a link, so range=user wraps just
+    # this segment rather than the whole rendered line.
+    parts="#[range=user|branch_pr]PR ##$number"
     # A draft PR isn't up for review, so that's surfaced right next to the
     # number rather than as a separate segment later in the row.
     [ "$draft" = true ] && parts="$parts #[fg=colour244](draft)#[default]"
-    parts="$parts · $commits $commits_label · $changed $files_label · $diff"
+    parts="$parts#[norange] · $commits $commits_label · $changed $files_label · $diff"
 
     # Checks: GitHub's own merge-box wording, lowercased to match the bar's
     # style. A null rollup / zero contexts is "no checks" (none configured or

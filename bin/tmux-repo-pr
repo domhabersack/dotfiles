@@ -117,7 +117,9 @@ while read -r attached active wid path; do
       else
         split="(#[fg=colour6]$pr_human#[default] human, #[fg=colour6]$pr_bot#[default] bot)"
       fi
-      pr_part="#[bold]$pr_total $label#[nobold] $split"
+      # Click target (see bin/tmux-open-pr-link): only when a PR is actually
+      # listed, matching the "no PRs" branch above staying unranged/unclickable.
+      pr_part="#[range=user|repo_pr]#[bold]$pr_total $label#[nobold] $split#[norange]"
     fi
   fi
 
