@@ -105,8 +105,8 @@ setopt NO_BEEP
 bindkey -e                    # emacs key bindings (Ctrl-A/E/R/W/U etc.)
 bindkey '^[[1;5C' forward-word   # Ctrl-Right
 bindkey '^[[1;5D' backward-word  # Ctrl-Left
-bindkey '^[f'     forward-word   # Alt-F (Terminus iOS)
-bindkey '^[b'     backward-word  # Alt-B (Terminus iOS)
+bindkey '^[f'     forward-word   # Alt-F (Termius iOS)
+bindkey '^[b'     backward-word  # Alt-B (Termius iOS)
 
 
 ################
