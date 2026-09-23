@@ -226,19 +226,19 @@ suppression is scoped to this choose-tree format only: the same
 branch is main on” is always a glance away, and a repo with no remote
 (where the PR/vulnerability line is empty) still gets its branch there.
 
-`git-worktree-new <name>` (a zsh function, `~/.zshrc`) creates a git worktree
-at `<repo-root>/.worktrees/<name>` off a new branch of the same name (based on
-local `main`, falling back to the remote’s default branch via `origin/HEAD`),
-then jumps there -- inside tmux, to that worktree’s own window (creating one if
-needed, or reusing one already there even if it’s since `cd`’d somewhere
-inside the worktree); outside tmux, with a plain `cd` (`bin/git-worktree-add`,
-`bin/tmux-worktree-switch`). `<prefix> W` opens a popup
-(`bin/tmux-worktree-popup`) listing every worktree of the current repo, the
-one you’re standing in marked, for switching between them the same way --
+`git-worktree-new <name>` (a zsh function, `~/.zshrc`; `gwt` for short)
+creates a git worktree at `<repo-root>/.worktrees/<name>` off a new branch of
+the same name (based on local `main`, falling back to the remote’s default
+branch via `origin/HEAD`), then jumps there -- inside tmux, to that worktree’s
+own window (creating one if needed, or reusing one already there even if it’s
+since `cd`’d somewhere inside the worktree); outside tmux, with a plain `cd`
+(`bin/git-worktree-add`, `bin/tmux-worktree-switch`). `<prefix> W` opens a
+popup (`bin/tmux-worktree-popup`) listing every worktree of the current repo,
+the one you’re standing in marked, for switching between them the same way --
 a `bare` main worktree or `prunable` linked one (directory deleted, not yet
-removed) is left off the list, since picking either would silently do
-nothing. `.worktrees/` is ignored via `~/.gitignore_global` rather than a
-per-repo `.gitignore`, so it never needs committing to any repo it’s used in.
+removed) is left off the list, since picking either would silently do nothing.
+`.worktrees/` is ignored via `~/.gitignore_global` rather than a per-repo
+`.gitignore`, so it never needs committing to any repo it’s used in.
 
 Every worktree window is named plainly after the repo, same as an ordinary
 window -- the `⎇` prefix above is what makes the connection obvious instead,
