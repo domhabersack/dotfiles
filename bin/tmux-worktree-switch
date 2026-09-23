@@ -1,0 +1,57 @@
+#!/bin/sh
+# Switches to the tmux window for the worktree at $1 -- reusable by both the
+# create flow (git-worktree-new -> git-worktree-add -> here) and the popup
+# (tmux-worktree-popup); makes no assumption about who called it.
+#
+# Matches an existing window by resolving EACH window’s own pane path back to
+# its worktree root via `git rev-parse --show-toplevel`, not by comparing
+# pane_current_path to $1 literally -- a window that has since `cd`’d into a
+# subdirectory of the worktree (the ordinary case: you land in a worktree and
+# then move around in it) still resolves to the same root, so it’s found
+# instead of silently spawning a duplicate, indistinguishable window.
+#
+# Naming a freshly-created window: always the plain repo name, whether $1 is
+# the main worktree or a linked one. Which kind of worktree a window sits in
+# is shown separately and LIVE by bin/tmux-worktree-status (-windows), see
+# tmux.conf’s "Window worktree status" section -- so this script doesn’t need
+# to get that distinction right at creation time, and a window that later
+# ends up somewhere else (by hand, or by a future run of this script) stays
+# correctly labeled without ever needing to be renamed again. Root resolution
+# for the name is bin/git-worktree-root, so it names a submodule’s own window
+# after the submodule, not after whatever the superproject’s git metadata
+# path happens to look like.
+set -eu
+
+path=${1:?usage: tmux-worktree-switch <path>}
+# Resolved via git, not `cd`+`pwd`: --show-toplevel always resolves symlinks
+# (verified -- so does tmux’s own pane_current_path on macOS), and the match
+# loop below resolves every window’s path the same way, so both sides need
+# to go through git for a comparison between them to mean anything.
+path=$(git -C "$path" rev-parse --path-format=absolute --show-toplevel)
+
+match_id=""
+while IFS=' ' read -r wid wpath; do
+  [ -n "$wpath" ] || continue
+  wt_root=$(git -C "$wpath" rev-parse --path-format=absolute --show-toplevel 2>/dev/null) || continue
+  if [ "$wt_root" = "$path" ]; then
+    match_id=$wid
+    break
+  fi
+done <<WINDOWS
+$(tmux list-windows -a -F '#{window_id} #{pane_current_path}')
+WINDOWS
+
+if [ -n "$match_id" ]; then
+  target_sess=$(tmux display-message -p -t "$match_id" '#{session_name}')
+  cur_sess=$(tmux display-message -p '#{session_name}')
+  [ "$target_sess" = "$cur_sess" ] || tmux switch-client -t "$target_sess"
+  tmux select-window -t "$match_id"
+  exit 0
+fi
+
+main_root=$("$(dirname "$0")/git-worktree-root" "$path")
+repo_name=$(basename "$main_root")
+
+cur_sess=$(tmux display-message -p '#{session_name}')
+new_id=$(tmux new-window -t "${cur_sess}:" -c "$path" -n "$repo_name" -P -F '#{window_id}')
+tmux select-window -t "$new_id"

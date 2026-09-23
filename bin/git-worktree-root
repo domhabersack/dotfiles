@@ -1,0 +1,51 @@
+#!/bin/sh
+# Prints the absolute path of the MAIN (original) working tree of the repo
+# containing $1 (default: the current directory) -- correct whether $1 is the
+# main worktree itself, a linked one created by `git worktree add`, or a
+# submodule (whose .git metadata is relocated under the superproject’s
+# .git/modules/, the same relocation `git init --separate-git-dir=<dir>`
+# does directly).
+#
+# Two resolvable cases:
+#   - core.worktree is set in --git-common-dir’s own config: whatever
+#     relocated the gitdir also recorded the reverse mapping back to its one
+#     working directory (this is what `git submodule add` does, in addition
+#     to the plain relocation). Resolve that path relative to the gitdir.
+#   - core.worktree is unset and --git-common-dir ends in "/.git": the
+#     ordinary, non-relocated case, where the working directory is simply
+#     --git-common-dir’s parent.
+#
+# A repo relocated via `git init --separate-git-dir=<dir>` directly (not
+# through `git submodule`, which additionally sets core.worktree) falls into
+# neither: its gitdir has no reverse mapping back to a working directory at
+# all -- git’s own data model doesn’t keep one for this specific case, since
+# nothing rules out several working directories pointing at the same
+# external gitdir. Guessing wrong here would nest .worktrees/ inside the
+# repo’s own git metadata directory, so this instead verifies the computed
+# root is a real, live working tree (`--is-inside-work-tree`) and fails
+# loudly if it isn’t, rather than silently writing into the wrong place.
+set -eu
+
+dir=${1:-.}
+
+common_dir=$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)
+
+wt_rel=$(git config --file "$common_dir/config" --get core.worktree 2>/dev/null) || wt_rel=""
+if [ -n "$wt_rel" ]; then
+  root=$(cd "$common_dir" && cd "$wt_rel" && pwd)
+else
+  case "$common_dir" in
+    */.git) root=${common_dir%/.git} ;;
+    *)      root=$common_dir ;;
+  esac
+fi
+
+is_worktree=$(git -C "$root" rev-parse --is-inside-work-tree 2>/dev/null) || is_worktree="false"
+if [ "$is_worktree" != "true" ]; then
+  echo "git-worktree-root: could not resolve a working directory for git-common-dir $common_dir" >&2
+  echo "git-worktree-root: either this repository has no working directory at all (a bare repo used directly, with no main worktree of its own)," >&2
+  echo "git-worktree-root: or it was relocated via 'git init --separate-git-dir', which keeps no reverse mapping back to one" >&2
+  exit 1
+fi
+
+printf '%s\n' "$root"

@@ -1,20 +1,23 @@
 #!/bin/sh
-# Prints a compact "(branch)" label for the git repository containing the
+# Prints a compact branch label for the git repository containing the
 # directory given as $1 (default: the current directory), for display right
 # after a tmux window name -- so the window "codeshots" reads "codeshots
-# (main)". Prints nothing (exit 0) when $1 is not inside a git work tree, so a
+# main". Prints nothing (exit 0) when $1 is not inside a git work tree, so a
 # plain non-repo window keeps its bare name.
 #
-# On a normal branch the label is the branch name, "(main)". On a detached
+# On a normal branch the label is the branch name, "main". On a detached
 # HEAD -- mid-rebase, mid-bisect, or a checked-out tag/commit -- there is no
-# branch to name, so it falls back to the short commit hash, "(a1b2c3d)",
+# branch to name, so it falls back to the short commit hash, "a1b2c3d",
 # rather than showing nothing (which would misread as "not a repo"). A freshly
 # `git init`'d repo with no commits yet is already on an unborn branch, so it
-# shows that branch name — e.g. "(main)" — just like git's own status does.
+# shows that branch name — e.g. "main" — just like git's own status does.
 #
-# The output carries no tmux #[...] style tags: each caller wraps it in its own
-# color (dim on the status line, a calm gray in choose-tree), which also keeps
-# this usable as a plain string from any shell context.
+# The output carries no tmux #[...] style tags and no surrounding
+# parentheses: each caller dims it with its own color (the status line,
+# choose-tree) and, when the window sits in a linked git worktree, prefixes
+# it with a ⎇ instead (see "Window worktree status" in tmux.conf) -- keeping
+# the bare branch name here also keeps this usable as a plain string from
+# any shell context.
 set -eu
 
 dir=${1:-.}
@@ -32,4 +35,4 @@ if [ -z "$branch" ]; then
 fi
 
 [ -n "$branch" ] || exit 0
-printf '(%s)' "$branch"
+printf '%s' "$branch"

@@ -1,6 +1,12 @@
 #!/bin/sh
 # Sorts windows alphabetically by their canonical slug (see bin/tmux-window-slug),
 # so a leading marker or trailing task suffix never changes a window's position.
+# Within windows sharing a slug -- a repo's own window and its worktree
+# windows, since bin/tmux-worktree-switch names every worktree window plainly
+# after the repo -- the repo's own window sorts first and its worktree
+# windows after it, keyed on @worktree_here (bin/tmux-worktree-status):
+# non-empty means the window's pane sits in a LINKED worktree rather than the
+# repo's main checkout.
 # shellcheck source=./tmux-locklib
 . "$HOME/.dotfiles/bin/tmux-locklib"
 
@@ -14,8 +20,22 @@ slug() {
   "$HOME/.dotfiles/bin/tmux-window-slug"
 }
 
-current=$(tmux list-windows -F '#{window_name}' | slug | tr '\n' ' ')
-sorted=$(tmux list-windows -F '#{window_name}' | slug | sort | tr '\n' ' ')
+# One "<slug> TAB <index> TAB <name> TAB <worktree-flag>" line per window, in
+# list-windows order. Slug is computed in ONE pass over every window name
+# (not a subprocess per window); the worktree flag comes straight from
+# tmux's own -F expansion rather than a second pass over @worktree_here.
+snapshot() {
+  src=$(mktemp)
+  tmux list-windows -F '#{window_index}	#{window_name}	#{?#{@worktree_here},1,0}' > "$src"
+  cut -f2 "$src" | slug | paste - "$src"
+  rm -f "$src"
+}
+
+# The sort key is columns 1 (slug) and 4 (worktree flag) only -- index and
+# name ride along unused here so this check stays in lockstep with what the
+# reshuffle below actually sorts by.
+current=$(snapshot | cut -f1,4 | tr '\n' ' ')
+sorted=$(snapshot | sort -t'	' -k1,1 -k4,4 | cut -f1,4 | tr '\n' ' ')
 [ "$current" = "$sorted" ] && exit 0
 
 # Remember the window we're on. The reshuffle below can leave the client on a
@@ -25,20 +45,15 @@ sorted=$(tmux list-windows -F '#{window_name}' | slug | sort | tr '\n' ' ')
 # reselect this window and trigger one clean render.
 active=$(tmux list-windows -F '#{window_active} #{window_id}' | awk '$1 == 1 { print $2; exit }')
 
-# Snapshot "window_index TAB window_name", compute every slug in ONE pass (not a
-# subprocess per window), pair each slug with its index, and sort by slug. The
-# trailing window_name column rides along unused and is ignored when reading back.
-snap=$(mktemp)
 tmp=$(mktemp)
-tmux list-windows -F '#{window_index}	#{window_name}' > "$snap"
-cut -f2 "$snap" | slug | paste - "$snap" | sort -t'	' -k1,1 > "$tmp"
+snapshot | sort -t'	' -k1,1 -k4,4 > "$tmp"
 
 i=10000
-while IFS='	' read -r _ idx _; do
+while IFS='	' read -r _ idx _ _; do
   tmux move-window -s ":$idx" -t ":$i" 2>/dev/null
   i=$((i + 1))
 done < "$tmp"
-rm -f "$snap" "$tmp"
+rm -f "$tmp"
 tmux move-window -r
 
 # Return to the window we started on, then release the lock BEFORE rendering so
