@@ -188,7 +188,6 @@ set updatetime=100
 """"""""""""""""""""""""""""""""
 
 if has('nvim')
-  nnoremap <C-n> :NvimTreeToggle<CR>
 lua << EOF
 -- Only replace netrw once nvim-tree is actually loadable. Disabling it
 -- unconditionally would leave a machine that has not run :PlugInstall yet with
@@ -200,6 +199,10 @@ if ok then
 -- them, are sourced only after the whole vimrc has run
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
+
+-- Inside the guard for the same reason: mapping <C-n> to a command that does
+-- not exist yet would answer with E492 instead of falling through to netrw
+vim.keymap.set('n', '<C-n>', '<cmd>NvimTreeToggle<CR>')
 
 nvim_tree.setup({
   view = { width = 48 },
