@@ -35,7 +35,7 @@ init_repo() {
 }
 
 # The counts without the tmux style tags, so assertions read as the user sees
-# them: "4 files · +120 -30".
+# them: "4 files · +140 -30".
 plain() { printf '%s' "$1" | sed -e 's/#\[[^]]*\]//g'; }
 
 # Assert the script reports exactly $1 for the repo (or for $2, a path inside it).

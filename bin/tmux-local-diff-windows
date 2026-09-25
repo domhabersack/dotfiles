@@ -1,7 +1,7 @@
 #!/bin/sh
 # Stamps @local_diff -- the working-state-vs-local-trunk summary from
 # bin/tmux-local-diff -- onto the windows whose value can actually be seen, so
-# the status bar's top row can print "dotfiles feat/x · 4 files · +120 -30"
+# the status bar's top row can print "dotfiles feat/x · 4 files · +140 -30"
 # right after the branch.
 #
 # Only the ACTIVE window of each attached session is computed, unlike
