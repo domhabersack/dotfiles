@@ -80,8 +80,24 @@ set number
 " always show current position
 set ruler
 
-" show gutter after column 120
-set colorcolumn=121
+" show gutter one column past 'textwidth' (defaults to 120). Neovim's built-in
+" editorconfig support overrides 'textwidth' per-directory from
+" max_line_length, so the gutter follows the nearest .editorconfig; plain vim
+" has no editorconfig support and always keeps the 120. Two knock-on effects of
+" deriving the gutter from 'textwidth' rather than hardcoding a column:
+" max_line_length = off maps to textwidth=0, and colorcolumn=+1 draws nothing
+" at 0, so such a directory gets no gutter at all -- an explicit "no limit",
+" honestly rendered; and a filetype whose ftplugin sets 'textwidth' moves the
+" gutter with it, so a gitcommit buffer marks its 72-column convention at 73
+" instead of sitting at an irrelevant 121.
+set textwidth=120
+set colorcolumn=+1
+
+" 'textwidth' is set above only to place the gutter, so it must never break
+" lines. Cleared globally, not just in the FileType autocmd below, because a
+" buffer that never fires FileType -- an unrecognized extension, or :enew --
+" would otherwise keep the default "t" and hard-wrap at column 120.
+set formatoptions-=t formatoptions-=c
 
 " highlight current line
 set cursorline
@@ -118,8 +134,10 @@ set ignorecase
 set autoread
 autocmd FocusGained,BufEnter,CursorHold,CursorHoldI * if mode() != 'c' | checktime | endif
 
-" do not auto-insert comments
-autocmd FileType * setlocal formatoptions-=c formatoptions-=r formatoptions-=o
+" re-clear per buffer: an ftplugin may add the auto-wrap and comment-leader
+" flags back, and this autocmd runs after ftplugins (filetype plugin indent on
+" is enabled above, so its autocmds are registered first)
+autocmd FileType * setlocal formatoptions-=c formatoptions-=r formatoptions-=o formatoptions-=t
 
 " color status bar when in insert mode
 function! InsertStatuslineColor(mode)
