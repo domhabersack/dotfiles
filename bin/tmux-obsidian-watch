@@ -1,34 +1,37 @@
 #!/bin/sh
-# Starts a background fswatch watcher that re-runs tmux-obsidian-tasks
-# whenever any daily note under TMUX_OBSIDIAN_DAILY_DIR changes.
+# Starts a background fswatch watcher that re-runs tmux-obsidian-tasks whenever
+# any daily note under TMUX_OBSIDIAN_DAILY_DIR changes. Single-instance guarded
+# per tmux server, and exits with the server that started it (see
+# bin/tmux-watchlib): safe to call on every config reload.
 #
-# Single-instance guarded: safe to call multiple times (e.g. on config reload).
 # TMUX_OBSIDIAN_DAILY_DIR unset/empty means the feature is disabled: exit
 # immediately without starting fswatch.
 
+# shellcheck source=./tmux-watchlib
+. "$HOME/.dotfiles/bin/tmux-watchlib"
+
 [ -n "$TMUX_OBSIDIAN_DAILY_DIR" ] || exit 0
 DAILY_DIR="$TMUX_OBSIDIAN_DAILY_DIR"
-PIDFILE=/tmp/tmux-obsidian-watch.pid
 UPDATER=~/.dotfiles/bin/tmux-obsidian-tasks
 
 # Graceful no-op if fswatch is not installed.
 command -v fswatch >/dev/null 2>&1 || exit 0
 
-# Single-instance guard — reuse the running watcher if it's still alive.
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  exit 0
-fi
+# Exported so the watcher child inherits them: the body below is single-quoted
+# on purpose, so these must expand in the child rather than here. Passing the
+# directory as a variable also avoids quoting trouble when it contains a space.
+export DAILY_DIR UPDATER
 
-# Launch detached. Pass DAILY_DIR via env var to avoid quoting issues with
-# a space in the directory name inside a sh -c string. The single quotes
-# below are deliberate: $DAILY_DIR/$UPDATER must expand inside the nested
-# sh -c, not in this shell.
+# watch_alive is checked per event rather than as the loop condition, because
+# fswatch blocks until a note changes. A watcher whose server has gone away
+# therefore lingers until the next save, then exits -- it cannot notice sooner
+# without polling, and one leftover fswatch waiting on a directory is cheap.
+#
 # -o: batch mode (coalesce rapid saves into one event)
 # -e "/Archive/": exclude archive subdirectory
-# shellcheck disable=SC2016
-DAILY_DIR="$DAILY_DIR" UPDATER="$UPDATER" \
-  nohup sh -c \
-    'fswatch -o -e "/Archive/" "$DAILY_DIR" | while read -r _; do "$UPDATER"; done' \
-  >/dev/null 2>&1 &
-
-echo $! > "$PIDFILE"
+# shellcheck disable=SC2016 # single-quoted on purpose: these must expand in the child, not here
+watch_spawn tmux-obsidian-watch \
+  'fswatch -o -e "/Archive/" "$DAILY_DIR" | while read -r _; do
+     watch_alive || exit 0
+     "$UPDATER"
+   done'

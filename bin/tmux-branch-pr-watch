@@ -2,20 +2,17 @@
 # Starts a background ticker that re-runs tmux-branch-pr on a fixed interval, so
 # a `git checkout` (or a CI run finishing, a review landing, a comment being
 # resolved) in a window you then sit still in — with no window/pane event to
-# trigger a re-render — still gets picked up within one tick, and stale
-# per-branch caches get refreshed even while idle. Single-instance guarded:
+# trigger a re-render — still gets picked up within one tick, and stale per-
+# branch caches get refreshed even while idle. Single-instance guarded per tmux
+# server, and exits with the server that started it (see bin/tmux-watchlib):
 # safe to call on every config reload. Mirrors bin/tmux-repo-pr-watch.
 
-PIDFILE=/tmp/tmux-branch-pr-watch.pid
+# shellcheck source=./tmux-watchlib
+. "$HOME/.dotfiles/bin/tmux-watchlib"
+
 INTERVAL=60
 
-# Reuse the running ticker if it is still alive.
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  exit 0
-fi
-
-nohup sh -c \
-  'while :; do ~/.dotfiles/bin/tmux-branch-pr; sleep '"$INTERVAL"'; done' \
-  >/dev/null 2>&1 &
-
-echo $! > "$PIDFILE"
+# watch_alive as the loop condition, not `while :`, so this exits once the
+# tmux server that started it is gone rather than ticking forever.
+watch_spawn tmux-branch-pr-watch \
+  'while watch_alive; do ~/.dotfiles/bin/tmux-branch-pr; sleep '"$INTERVAL"'; done'

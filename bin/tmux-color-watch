@@ -1,22 +1,28 @@
 #!/bin/sh
-# Starts a background fswatch watcher that re-runs tmux-color-windows
-# whenever the window-colors config file is saved.
-# Single-instance guarded: safe to call on every config reload.
+# Starts a background fswatch watcher that re-runs tmux-color-windows whenever
+# the window-colors config file is saved. Single-instance guarded per tmux
+# server, and exits with the server that started it (see bin/tmux-watchlib):
+# safe to call on every config reload.
+
+# shellcheck source=./tmux-watchlib
+. "$HOME/.dotfiles/bin/tmux-watchlib"
 
 CONFIG="$HOME/.dotfiles/window-colors"
-PIDFILE=/tmp/tmux-color-watch.pid
 
 command -v fswatch >/dev/null 2>&1 || exit 0
 [ -f "$CONFIG" ] || exit 0
 
-# Reuse the running watcher if it is still alive.
-if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-  exit 0
-fi
+# Exported so the watcher child inherits it: the body below is single-quoted on
+# purpose, so $CONFIG must expand in the child rather than here.
+export CONFIG
 
-# shellcheck disable=SC2016 # single-quoted on purpose: $CONFIG must expand in the child sh -c, not here
-CONFIG="$CONFIG" nohup sh -c \
-  'fswatch -o "$CONFIG" | while read -r _; do ~/.dotfiles/bin/tmux-color-windows; done' \
-  >/dev/null 2>&1 &
-
-echo $! > "$PIDFILE"
+# watch_alive is checked per event rather than as the loop condition, because
+# fswatch blocks until the file changes. A watcher whose server has gone away
+# therefore lingers until the next save, then exits -- it cannot notice sooner
+# without polling, and one leftover fswatch waiting on a file is cheap.
+# shellcheck disable=SC2016 # single-quoted on purpose: $CONFIG must expand in the child, not here
+watch_spawn tmux-color-watch \
+  'fswatch -o "$CONFIG" | while read -r _; do
+     watch_alive || exit 0
+     ~/.dotfiles/bin/tmux-color-windows
+   done'
