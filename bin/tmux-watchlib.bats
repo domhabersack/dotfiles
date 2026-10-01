@@ -20,22 +20,25 @@ setup() {
   mkdir -p "$TMUX_WATCH_DIR"
 
   # Mock tmux. The library only ever calls `display-message -p '#{pid}'`, to ask
-  # which server is answering on our socket. $MOCK_DIR/server-pid holds that
-  # answer; absent means no server is listening, which is what the real tmux
-  # reports by failing.
+  # which server is answering on our socket.
+  # Answers per socket, the way a real tmux does: each fake server has its own
+  # pid file, so one server's watcher cannot be told another's pid.
   cat > "$MOCK_DIR/bin/tmux" <<'MOCKTMUX'
 #!/bin/sh
 case "$1" in
   display-message)
-    if [ ! -f "$MOCK_DIR/server-pid" ]; then
-      # what the real tmux says, and what watch_alive treats as definite
-      echo "no server running on $MOCK_DIR/socket" >&2
-      exit 1
-    fi
+    sock=${TMUX%%,*}
+    pidfile="$MOCK_DIR/pid-$(basename "$sock")"
     if [ -f "$MOCK_DIR/server-flaky" ]; then
       exit 1                      # fails without saying why: inconclusive
     fi
-    cat "$MOCK_DIR/server-pid"
+    if [ ! -f "$pidfile" ]; then
+      # what the real tmux says -- which, deliberately, watch_alive does NOT
+      # treat as definite, because tmux says it for timeouts too
+      echo "no server running on $sock" >&2
+      exit 1
+    fi
+    cat "$pidfile"
     ;;
   *) : ;;
 esac
@@ -60,7 +63,8 @@ MOCKFSW
   : > "$OTHER_SOCK"
   export TMUX="$SOCK,4242,0"
   export OTHER_TMUX="$OTHER_SOCK,777,0"
-  echo 4242 > "$MOCK_DIR/server-pid"
+  echo 4242 > "$MOCK_DIR/pid-socket"
+  echo 777  > "$MOCK_DIR/pid-other-socket"
 
   # shellcheck source=./tmux-watchlib
   . "$HOME/.dotfiles/bin/tmux-watchlib"
@@ -76,7 +80,7 @@ teardown() {
   # machine. Under the load of a full suite run that is not hypothetical -- it
   # repeatedly killed the watchers of the real tmux session on this machine. The
   # watchers already know how to stop themselves, so let them.
-  rm -f "$SOCK" "$OTHER_SOCK" "$MOCK_DIR/server-pid" "$MOCK_DIR/server-flaky"
+  rm -f "$SOCK" "$OTHER_SOCK" "$MOCK_DIR"/pid-* "$MOCK_DIR/server-flaky"
 
   for _ in $(seq 100); do
     [ -z "$(ls "$TMUX_WATCH_DIR"/*/* 2>/dev/null)" ] && break
@@ -190,7 +194,7 @@ TICK='while watch_alive; do sleep 0.1; done'
   pid=$(recorded_pid demo)
   kill -0 "$pid"
 
-  rm -f "$MOCK_DIR/server-pid" "$SOCK"   # server gone, socket removed with it
+  rm -f "$MOCK_DIR/pid-socket" "$SOCK"   # server gone, socket removed with it
 
   run wait_for pid_gone "$pid"
   [ "$status" -eq 0 ]
@@ -202,7 +206,7 @@ TICK='while watch_alive; do sleep 0.1; done'
   watch_spawn demo "$TICK"
   pid=$(recorded_pid demo)
 
-  echo 9999 > "$MOCK_DIR/server-pid"   # restarted server, same socket, new pid
+  echo 9999 > "$MOCK_DIR/pid-socket"   # restarted server, same socket, new pid
 
   run wait_for pid_gone "$pid"
   [ "$status" -eq 0 ]
@@ -221,7 +225,7 @@ TICK='while watch_alive; do sleep 0.1; done'
   pid=$(recorded_pid demo)
   [ -f "$(pidfile_of demo)" ]
 
-  rm -f "$MOCK_DIR/server-pid" "$SOCK"
+  rm -f "$MOCK_DIR/pid-socket" "$SOCK"
 
   run wait_for pid_gone "$pid"
   [ "$status" -eq 0 ]
@@ -297,7 +301,7 @@ MOCKPS
   run watch_alive
   [ "$status" -eq 0 ]
 
-  echo 9999 > "$MOCK_DIR/server-pid"       # someone else's server
+  echo 9999 > "$MOCK_DIR/pid-socket"       # someone else's server
   run watch_alive
   [ "$status" -eq 1 ]
 
@@ -309,7 +313,10 @@ MOCKPS
 @test "an inconclusive probe does not kill the watcher" {
   # the regression this guards: treating any failed probe as "server gone" made
   # watchers die off whenever the machine was too busy for tmux to answer
-  watch_spawn demo "$TICK"
+  # a one-second tick, so the 20 inconclusive ticks this watcher is allowed take
+  # far longer than the wait below -- with the 0.1s tick the budget runs out in
+  # two seconds on a fast machine and the test measures the wrong thing
+  watch_spawn demo 'while watch_alive; do sleep 1; done'
   pid=$(recorded_pid demo)
   run wait_for has_marker "$pid" demo
   [ "$status" -eq 0 ]
@@ -361,7 +368,7 @@ MOCKPS
   [ "$status" -eq 0 ]
   [ -n "$(pgrep -P "$pid" 2>/dev/null)" ]        # fswatch is running under it
 
-  rm -f "$MOCK_DIR/server-pid" "$SOCK"
+  rm -f "$MOCK_DIR/pid-socket" "$SOCK"
 
   run wait_for pid_gone "$pid"
   [ "$status" -eq 0 ]
@@ -386,8 +393,23 @@ MOCKPS
   [ "$status" -eq 0 ]
 }
 
-@test "state lives under TMUX_WATCH_DIR, never /tmp" {
+@test "state honours TMUX_WATCH_DIR" {
   watch_spawn demo "$TICK"
   [[ "$(_watch_dir)" == "$TMUX_WATCH_DIR"/* ]]
-  [[ "$(_watch_dir)" != /tmp/* ]]
+}
+
+@test "the default state location is durable, not /tmp" {
+  # /tmp is purged by macOS's periodic cleaner, which deleted state from under a
+  # running watcher and let the guard start a second one
+  ( unset TMUX_WATCH_DIR
+    XDG_STATE_HOME="$BATS_TEST_TMPDIR/xdg"
+    export XDG_STATE_HOME
+    # shellcheck source=./tmux-watchlib
+    . "$HOME/.dotfiles/bin/tmux-watchlib"
+    [ "$TMUX_WATCH_DIR" = "$XDG_STATE_HOME/tmux-watch" ] )
+
+  ( unset TMUX_WATCH_DIR XDG_STATE_HOME
+    # shellcheck source=./tmux-watchlib
+    . "$HOME/.dotfiles/bin/tmux-watchlib"
+    [ "$TMUX_WATCH_DIR" = "$HOME/.local/state/tmux-watch" ] )
 }
