@@ -13,6 +13,7 @@
 [ -n "$TMUX_OBSIDIAN_DAILY_DIR" ] || exit 0
 DAILY_DIR="$TMUX_OBSIDIAN_DAILY_DIR"
 UPDATER=~/.dotfiles/bin/tmux-obsidian-tasks
+INTERVAL=30
 
 # Graceful no-op if fswatch is not installed.
 command -v fswatch >/dev/null 2>&1 || exit 0
@@ -22,16 +23,17 @@ command -v fswatch >/dev/null 2>&1 || exit 0
 # directory as a variable also avoids quoting trouble when it contains a space.
 export DAILY_DIR UPDATER
 
-# watch_alive is checked per event rather than as the loop condition, because
-# fswatch blocks until a note changes. A watcher whose server has gone away
-# therefore lingers until the next save, then exits -- it cannot notice sooner
-# without polling, and one leftover fswatch waiting on a directory is cheap.
+# fswatch runs in the background and the watcher waits on watch_alive instead of
+# on fswatch -- see the long note in bin/tmux-color-watch for why round that way.
+# Polling watch_alive bounds the exit to one interval, and pkill -P reaps both
+# children, fswatch included; notes are still handled the moment they change.
 #
 # -o: batch mode (coalesce rapid saves into one event)
 # -e "/Archive/": exclude archive subdirectory
-# shellcheck disable=SC2016 # single-quoted on purpose: these must expand in the child, not here
+# shellcheck disable=SC2016 # single-quoted on purpose: these expand in the child
 watch_spawn tmux-obsidian-watch \
   'fswatch -o -e "/Archive/" "$DAILY_DIR" | while read -r _; do
-     watch_alive || exit 0
      "$UPDATER"
-   done'
+   done &
+   while watch_alive; do sleep '"$INTERVAL"'; done
+   pkill -P $$ 2>/dev/null'

@@ -1,7 +1,7 @@
 #!/bin/sh
 # Starts a background ticker that re-runs tmux-repo-pr on a fixed interval, so a
-# `cd` into a different repo with no window/pane-switch event to trigger a re-
-# render still gets picked up within one tick, and stale per-repo caches get
+# `cd` into a different repo with no window/pane-switch event to trigger a
+# re-render still gets picked up within one tick, and stale per-repo caches get
 # refreshed even when idle. Single-instance guarded per tmux server, and exits
 # with the server that started it (see bin/tmux-watchlib): safe to call on every
 # config reload.

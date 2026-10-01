@@ -2,10 +2,11 @@
 # Starts a background ticker that re-runs tmux-branch-pr on a fixed interval, so
 # a `git checkout` (or a CI run finishing, a review landing, a comment being
 # resolved) in a window you then sit still in — with no window/pane event to
-# trigger a re-render — still gets picked up within one tick, and stale per-
-# branch caches get refreshed even while idle. Single-instance guarded per tmux
-# server, and exits with the server that started it (see bin/tmux-watchlib):
-# safe to call on every config reload. Mirrors bin/tmux-repo-pr-watch.
+# trigger a re-render — still gets picked up within one tick, and stale
+# per-branch caches get refreshed even while idle. Single-instance guarded per
+# tmux server, and exits with the server that started it (see
+# bin/tmux-watchlib): safe to call on every config reload. Mirrors
+# bin/tmux-repo-pr-watch.
 
 # shellcheck source=./tmux-watchlib
 . "$HOME/.dotfiles/bin/tmux-watchlib"

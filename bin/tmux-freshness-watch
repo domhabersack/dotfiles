@@ -1,9 +1,9 @@
 #!/bin/sh
 # Starts a background ticker that re-renders the window freshness bars on a
 # fixed interval, so they decay over time even when no window events
-# (new/select/rename) are firing to re-run tmux-freshness-windows. Single-
-# instance guarded per tmux server, and exits with the server that started it
-# (see bin/tmux-watchlib): safe to call on every config reload.
+# (new/select/rename) are firing to re-run tmux-freshness-windows.
+# Single-instance guarded per tmux server, and exits with the server that
+# started it (see bin/tmux-watchlib): safe to call on every config reload.
 
 # shellcheck source=./tmux-watchlib
 . "$HOME/.dotfiles/bin/tmux-watchlib"

@@ -5,71 +5,142 @@
 #
 #   watch_spawn NAME BODY  -> start BODY detached as watcher NAME, unless a
 #                             watcher for NAME is already running on this tmux
-#                             server. BODY is a sh snippet run in a loop-owning
-#                             child; it may call watch_alive (see below).
+#                             server. BODY is a sh snippet run in a child that
+#                             has this library sourced, so it may call
+#                             watch_alive. Returns 1 if it could not start one.
 #   watch_alive            -> 0 while the tmux server that started us is still
 #                             running, 1 once it is gone. Available inside BODY.
 #
-# Three things went wrong with the per-script guard this replaces, and each is
-# fixed here.
+# A watcher is a process that has to outlive the command that started it but not
+# the tmux server it belongs to, and there must be exactly one of it. The guard
+# this replaces -- a pidfile at a fixed path in /tmp, believed whenever the PID
+# in it was alive -- got every part of that wrong, in ways that compounded:
 #
-# 1. Watchers outlived their server. A child started from run-shell survives
-#    the server exiting -- not because of nohup, but because tmux does not kill
-#    its run-shell descendants at all. So a watcher had to be told to stop:
-#    every loop here re-checks watch_alive and exits once its server is gone.
-#    Without that, a loop from a server that died weeks ago keeps waking up
-#    forever to talk to a socket nobody is listening on.
+# 1. Watchers outlived their server. A child started from run-shell survives the
+#    server exiting -- not because of nohup, but because tmux does not kill its
+#    run-shell descendants at all. So a watcher has to be told to stop: every
+#    loop runs `while watch_alive` and ends when its server goes away.
 #
-# 2. The pidfile was one fixed path per watcher, shared by every tmux server on
-#    the machine. A throwaway server -- `tmux -L test -f tmux.conf start-server`
-#    while testing -- left a watcher holding that path, and the real session
-#    then found a live PID there and started no watcher of its own, silently
-#    losing the feature until the next reboot. The pidfile is keyed by server
-#    socket now, so servers cannot block each other.
+# 2. One fixed pidfile path was shared by every tmux server on the machine, so a
+#    throwaway server -- one started to test a config change -- left a watcher
+#    holding that path, and the real session then found a live PID there and
+#    started no watcher of its own, silently losing the feature. State is keyed
+#    by socket path and server pid now, so servers cannot block each other.
 #
-# 3. The guard trusted any live PID in the pidfile. A PID recycled by an
-#    unrelated process reads as "watcher already running" and blocks startup for
-#    good. Each watcher now carries a marker in its command line, and the guard
-#    believes a live PID only if that PID still carries our marker.
+# 3. A live PID was trusted on sight, so a PID the kernel had recycled for
+#    something unrelated blocked startup for good. A watcher carries a marker
+#    naming itself and its server, and only that marker is believed.
+#
+# 4. Nothing was atomic, so two starts racing each other both spawned. The claim
+#    below is a mkdir, the same trick tmux-locklib uses for the same reason.
+#
+# 5. Nothing was ever cleaned up. A watcher removes its own state as it exits,
+#    and each start reaps the state of servers that are gone.
 
-# Where watcher state lives. /tmp to match the lock files the hook scripts keep
-# there; TMUX_WATCH_DIR overrides it so the tests can run without touching the
-# real session's watchers. Deliberately not $TMPDIR, which on macOS is a
-# per-process private directory -- state has to be at one predictable path for
-# the guard to find it again.
-: "${TMUX_WATCH_DIR:=/tmp}"
+# lock_acquire, for the spawn claim below: a mkdir lock that records its owner's
+# pid, so a claim left behind by a run that died is stolen rather than honoured.
+# shellcheck source=./tmux-locklib
+. "$HOME/.dotfiles/bin/tmux-locklib"
 
-# Directory for watcher state. Keyed by the tmux server's socket path so two
-# servers keep separate sets. Outside tmux (no $TMUX) fall back to a shared
-# "nosrv" bucket: a watcher started by hand still gets a single-instance guard,
-# it just cannot tie its life to a server.
-_watch_dir() {
+# Where watcher state lives. Deliberately not /tmp: macOS runs a periodic
+# cleaner over /tmp that deletes files by age, and a tmux server routinely lives
+# longer than that -- state written once at spawn was being deleted out from
+# under a running watcher, at which point the guard could no longer see it and
+# started a second one. That is exactly the failure this library exists to stop,
+# so the state has to be somewhere durable. Also not $TMPDIR, which on macOS is
+# per-process: the guard would never find it again.
+: "${TMUX_WATCH_DIR:=${XDG_STATE_HOME:-$HOME/.local/state}/tmux-watch}"
+
+# The tmux server we belong to, as "socket-pid", or "nosrv" outside tmux.
+# $TMUX is "socket-path,server-pid,session-id". The socket path identifies the
+# server and the pid distinguishes a restarted server reusing the same socket;
+# slashes become underscores so the pair is one path segment.
+_watch_key() {
   if [ -n "${TMUX:-}" ]; then
-    # $TMUX is "socket-path,server-pid,session-id"; the socket path identifies
-    # the server, and the server pid distinguishes a restarted server reusing
-    # the same socket. Slashes become underscores so it is one path segment.
-    _wd_sock=$(printf '%s' "$TMUX" | cut -d, -f1 | tr '/' '_')
-    _wd_pid=$(printf '%s' "$TMUX" | cut -d, -f2)
-    printf '%s/tmux-watch-%s-%s' "$TMUX_WATCH_DIR" "$_wd_sock" "$_wd_pid"
+    printf '%s-%s' \
+      "$(printf '%s' "$TMUX" | cut -d, -f1 | tr '/' '_')" \
+      "$(printf '%s' "$TMUX" | cut -d, -f2)"
   else
-    printf '%s/tmux-watch-nosrv' "$TMUX_WATCH_DIR"
+    printf 'nosrv'
   fi
 }
 
-# 0 while our tmux server is alive. has-session is the probe: it reports the
-# server named by $TMUX, exits non-zero once that server is gone, and -- unlike
-# most tmux commands -- never starts a server to answer. Outside tmux there is
-# no server to outlive, so report alive and let the body run until killed.
-watch_alive() {
+# Just the server pid, or empty outside tmux.
+_watch_server_pid() {
   [ -n "${TMUX:-}" ] || return 0
-  tmux has-session >/dev/null 2>&1
+  _wsp=${TMUX#*,}
+  printf '%s' "${_wsp%%,*}"
+}
+
+_watch_dir() {
+  printf '%s/%s' "$TMUX_WATCH_DIR" "$(_watch_key)"
 }
 
 # The marker a watcher carries in its own command line, so a live PID can be
-# confirmed as ours. A no-op `:` command, which costs nothing to run and shows
-# up verbatim in ps output.
+# confirmed as ours. A no-op `:` command: free to run, and visible in ps output.
+# It names the server as well as the watcher, so one server's watcher can never
+# be mistaken for another's after a PID is recycled.
 _watch_marker() {
-  printf ': tmux-watch=%s;' "$1"
+  printf ': tmux-watch=%s@%s;' "$1" "$(_watch_key)"
+}
+
+# 0 while the tmux server that started us is alive.
+#
+# Two things this has to get right, each learned the hard way.
+#
+# It compares the server's pid rather than merely reaching its socket. A new
+# server listening on the same socket answers just as readily as the one we
+# belong to, so a reachability check made a watcher adopt its successor and tick
+# forever alongside the new server's own watcher. display-message reports the
+# live server's pid and, unlike most tmux commands, never starts a server to
+# answer.
+#
+# And it only stops on an answer that load cannot fake: the socket having gone,
+# or a different pid coming back. Anything else -- no output, a failed fork, a
+# connect that timed out, even tmux's own "no server running" (which it prints
+# for a timeout against a live server) -- means we learned nothing, and the
+# watcher carries on. Believing those made watchers die off whenever the machine
+# got busy, leaving the feature dead until the next config reload. A long run of
+# inconclusive ticks does end it, so a SIGKILLed server that left its socket
+# behind cannot strand one forever.
+#
+# Outside tmux there is no server to outlive, so report alive and let the body
+# run until something kills it.
+watch_alive() {
+  _wa_want=$(_watch_server_pid)
+  [ -n "$_wa_want" ] || return 0
+
+  # The socket going away is the one signal that cannot be a hiccup: a tmux
+  # server removes it on exit. Checking it first means the common "server really
+  # has gone" case needs no probe at all.
+  _wa_sock=${TMUX%%,*}
+  [ -e "$_wa_sock" ] || return 1
+
+  # One call, stderr folded in, so the answer and the complaint cannot come from
+  # two different moments.
+  _wa_said=$(tmux display-message -p '#{pid}' 2>&1 || true)
+
+  case "$_wa_said" in
+    ''|*[!0-9]*)
+      # Not a pid, so we learned nothing. Note that tmux's wording is no help
+      # here: under load it reports "no server running on <socket>" when a
+      # connect to a perfectly live server times out, so believing that message
+      # is what killed watchers off whenever the machine got busy. Carry on, and
+      # let the next tick ask again.
+      _WATCH_UNSURE=$((${_WATCH_UNSURE:-0} + 1))
+
+      # Unless it has been inconclusive for a long run of ticks. A server killed
+      # outright (SIGKILL) leaves its socket behind and answers nothing, and
+      # without this a watcher would wait on it forever -- the orphan this
+      # library exists to prevent.
+      [ "$_WATCH_UNSURE" -lt 20 ]
+      ;;
+    *)
+      # A bare pid is a definite answer either way.
+      _WATCH_UNSURE=0
+      [ "$_wa_said" = "$_wa_want" ]
+      ;;
+  esac
 }
 
 # 0 if a watcher for $1 is already running for this server.
@@ -89,34 +160,116 @@ _watch_running() {
   # ..." before the exec and "sh -c ..." after it. A guard that compared the
   # recorded spelling to the live one therefore never recognised its own
   # watcher, and spawned a duplicate on every config reload.
-  _wr_now=$(ps -o command= -p "$_wr_pid" 2>/dev/null)
-  # ps not telling us anything is unhelpful rather than fatal: fall back to
-  # trusting the pid, which is what the guard this replaces always did.
-  [ -n "$_wr_now" ] || return 0
+  _wr_now=$(ps -o command= -p "$_wr_pid" 2>/dev/null || true)
+
+  # ps telling us nothing means we cannot confirm ownership. Report "not
+  # running" and let a duplicate be started: a spare ticker is noisy but
+  # self-corrects, whereas assuming one is running means the feature stays
+  # silently dead for as long as that PID happens to exist.
   case "$_wr_now" in
     *"$(_watch_marker "$1")"*) return 0 ;;
     *) return 1 ;;
   esac
 }
 
+# Remove state belonging to servers that no longer exist, so the directory does
+# not grow one entry per tmux server ever started. Only siblings for our own
+# socket are considered, and only when the pid in the name is gone -- another
+# live server's state is never touched.
+_watch_reap() {
+  [ -n "${TMUX:-}" ] || return 0
+  _wrp_sock=$(printf '%s' "$TMUX" | cut -d, -f1 | tr '/' '_')
+  _wrp_mine=$(_watch_key)
+
+  for _wrp_dir in "$TMUX_WATCH_DIR/$_wrp_sock"-*; do
+    [ -d "$_wrp_dir" ] || continue
+    if [ "$(basename "$_wrp_dir")" = "$_wrp_mine" ]; then
+      continue                                      # that is us
+    fi
+    _wrp_pid=${_wrp_dir##*-}
+    case "$_wrp_pid" in
+      ''|*[!0-9]*) continue ;;                      # not a pid; leave it alone
+    esac
+    if kill -0 "$_wrp_pid" 2>/dev/null; then
+      continue                                      # that server is still live
+    fi
+    rm -rf "$_wrp_dir"
+  done
+}
+
 # watch_spawn NAME BODY -- start BODY detached unless NAME is already running.
-# BODY is evaluated by a child sh that has this library sourced, so it can call
-# watch_alive; write loops as `while watch_alive; do ...; done`.
+# Write loops as `while watch_alive; do ...; done` so they end with the server.
 watch_spawn() {
   _ws_name=$1
   _ws_body=$2
   _ws_dir=$(_watch_dir)
 
-  mkdir -p "$_ws_dir" 2>/dev/null || return 1
+  if ! mkdir -p "$_ws_dir" 2>/dev/null; then
+    echo "tmux-watchlib: cannot create $_ws_dir; not starting $_ws_name" >&2
+    return 1
+  fi
+
+  _watch_reap
   _watch_running "$_ws_name" && return 0
+
+  # Claim the name before spawning, so two starts racing each other -- a config
+  # reload while another server is coming up, say -- cannot both get through the
+  # check above. lock_acquire is tmux-locklib's: mkdir for atomicity, with the
+  # owner's pid recorded inside so a claim left behind by a run that died is
+  # detected as stale and stolen rather than wedging every later start.
+  #
+  # Doing that by hand here was wrong in a way worth recording: a loser that
+  # simply removed the claim it had failed to create was deleting the *winner's*
+  # live claim, which let a third caller create it again and spawn a duplicate.
+  # Telling "held right now" from "left behind by a corpse" needs the owner pid,
+  # which is exactly what locklib already stores.
+  _ws_claim="$_ws_dir/$_ws_name.claim"
+  lock_acquire "$_ws_claim" || return 1
+
+  # Inside the claim now. Re-check under it: a sibling may have finished spawning
+  # between our first check and our acquiring the claim.
+  if _watch_running "$_ws_name"; then
+    rm -rf "$_ws_claim"
+    return 0
+  fi
 
   # The child sources this library itself: it is a separate process and would
   # otherwise have no watch_alive. $HOME is spelled out rather than inherited
   # through ~ so the path survives the nested quoting. The marker goes first so
   # it is present in the command line for the whole life of the process.
+  # _WATCH_SELF makes the child clean up its own state file as it exits.
   # shellcheck disable=SC2016 # single-quoted on purpose: $HOME expands in the child sh
-  nohup sh -c "$(_watch_marker "$_ws_name")"' . "$HOME/.dotfiles/bin/tmux-watchlib"; '"$_ws_body" \
+  _WATCH_SELF="$_ws_dir/$_ws_name" \
+    nohup sh -c "$(_watch_marker "$_ws_name")"' . "$HOME/.dotfiles/bin/tmux-watchlib"; '"$_ws_body" \
     >/dev/null 2>&1 &
 
   printf '%s\n' "$!" > "$_ws_dir/$_ws_name"
+
+  # Hold the claim until the child is actually recognisable, then release it.
+  # Without this wait the claim would be gone while the child had yet to exec,
+  # and the next start -- finding a state file it could not confirm -- would
+  # spawn a second watcher. Bounded, because a child that never marks itself
+  # must not wedge the claim; `|| true` keeps a caller's `set -e` out of it.
+  _ws_wait=0
+  while [ "$_ws_wait" -lt 40 ]; do
+    _watch_running "$_ws_name" && break
+    _ws_wait=$((_ws_wait + 1))
+    sleep 0.05
+  done || true
+  rm -rf "$_ws_claim"
 }
+
+# Sourced by a watcher child rather than by a starter: arrange for its state file
+# to go away as it exits, so a watcher that has stopped leaves nothing for the
+# guard to examine. Set by watch_spawn, never by hand.
+#
+# The signal traps exit explicitly rather than sharing the EXIT handler. A trap
+# that only cleans up and returns *swallows* the signal -- the loop carries on,
+# and the watcher becomes unkillable by anything short of SIGKILL. Exiting from
+# the handler runs the EXIT trap, so the state file still goes away.
+if [ -n "${_WATCH_SELF:-}" ]; then
+  trap 'rm -f "$_WATCH_SELF"' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+fi

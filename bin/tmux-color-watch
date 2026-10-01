@@ -8,6 +8,7 @@
 . "$HOME/.dotfiles/bin/tmux-watchlib"
 
 CONFIG="$HOME/.dotfiles/window-colors"
+INTERVAL=30
 
 command -v fswatch >/dev/null 2>&1 || exit 0
 [ -f "$CONFIG" ] || exit 0
@@ -16,13 +17,19 @@ command -v fswatch >/dev/null 2>&1 || exit 0
 # purpose, so $CONFIG must expand in the child rather than here.
 export CONFIG
 
-# watch_alive is checked per event rather than as the loop condition, because
-# fswatch blocks until the file changes. A watcher whose server has gone away
-# therefore lingers until the next save, then exits -- it cannot notice sooner
-# without polling, and one leftover fswatch waiting on a file is cheap.
-# shellcheck disable=SC2016 # single-quoted on purpose: $CONFIG must expand in the child, not here
+# fswatch runs in the background and the watcher waits on watch_alive instead of
+# on fswatch, rather than the other way round. Reading fswatch's output directly
+# would mean the only chance to notice a dead server is the next time the file
+# changes -- which for a config file can be months -- and fswatch itself would be
+# left running regardless, since it exits only when something writes to a closed
+# pipe. (fswatch's own --one-event does not help: it prints the event and keeps
+# running.) Polling watch_alive bounds the exit to one interval, and pkill -P
+# reaps both children, fswatch included. Events are still handled the moment
+# they arrive: nothing here polls the file.
+# shellcheck disable=SC2016 # single-quoted on purpose: $CONFIG/$INTERVAL expand in the child
 watch_spawn tmux-color-watch \
   'fswatch -o "$CONFIG" | while read -r _; do
-     watch_alive || exit 0
      ~/.dotfiles/bin/tmux-color-windows
-   done'
+   done &
+   while watch_alive; do sleep '"$INTERVAL"'; done
+   pkill -P $$ 2>/dev/null'
