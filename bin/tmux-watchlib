@@ -86,7 +86,7 @@ _watch_marker() {
 
 # 0 while the tmux server that started us is alive.
 #
-# Two things this has to get right, each learned the hard way.
+# Three things this has to get right, each learned the hard way.
 #
 # It compares the server's pid rather than merely reaching its socket. A new
 # server listening on the same socket answers just as readily as the one we
@@ -95,14 +95,18 @@ _watch_marker() {
 # live server's pid and, unlike most tmux commands, never starts a server to
 # answer.
 #
-# And it only stops on an answer that load cannot fake: the socket having gone,
-# or a different pid coming back. Anything else -- no output, a failed fork, a
-# connect that timed out, even tmux's own "no server running" (which it prints
-# for a timeout against a live server) -- means we learned nothing, and the
-# watcher carries on. Believing those made watchers die off whenever the machine
-# got busy, leaving the feature dead until the next config reload. A long run of
-# inconclusive ticks does end it, so a SIGKILLed server that left its socket
-# behind cannot strand one forever.
+# It does not believe tmux's wording. Under load tmux prints "no server running
+# on <socket>" for a connect that timed out against a perfectly live server, so
+# treating that as an answer made watchers die off whenever the machine got busy,
+# leaving the feature dead until the next config reload.
+#
+# And it does not assume a dead server tidies up after itself. tmux does NOT
+# unlink its socket when it exits -- measured, for kill-server, for the last
+# session closing, and for SIGTERM to the server; the file is only replaced when
+# something next starts a server on that path. So a server that quits and is not
+# replaced leaves a socket that answers nothing, and the only thing separating
+# that from a momentarily busy server is how long it goes on. Hence the grace
+# period below: inconclusive probes are tolerated, but only for so long.
 #
 # Outside tmux there is no server to outlive, so report alive and let the body
 # run until something kills it.
@@ -110,9 +114,9 @@ watch_alive() {
   _wa_want=$(_watch_server_pid)
   [ -n "$_wa_want" ] || return 0
 
-  # The socket going away is the one signal that cannot be a hiccup: a tmux
-  # server removes it on exit. Checking it first means the common "server really
-  # has gone" case needs no probe at all.
+  # A socket that is gone is still a definite answer -- it just is not the
+  # common one, since tmux leaves the file behind (see above). Cheap, so ask
+  # first.
   _wa_sock=${TMUX%%,*}
   [ -e "$_wa_sock" ] || return 1
 
@@ -122,22 +126,18 @@ watch_alive() {
 
   case "$_wa_said" in
     ''|*[!0-9]*)
-      # Not a pid, so we learned nothing. Note that tmux's wording is no help
-      # here: under load it reports "no server running on <socket>" when a
-      # connect to a perfectly live server times out, so believing that message
-      # is what killed watchers off whenever the machine got busy. Carry on, and
-      # let the next tick ask again.
-      _WATCH_UNSURE=$((${_WATCH_UNSURE:-0} + 1))
-
-      # Unless it has been inconclusive for a long run of ticks. A server killed
-      # outright (SIGKILL) leaves its socket behind and answers nothing, and
-      # without this a watcher would wait on it forever -- the orphan this
-      # library exists to prevent.
-      [ "$_WATCH_UNSURE" -lt 20 ]
+      # Not a pid, so we learned nothing this time. Keep going, but remember
+      # since when, and give up once the run of silence is longer than any
+      # plausible hiccup: that is what finally stops a watcher whose server quit
+      # without being replaced, and it is bounded in time rather than in ticks so
+      # a 60s watcher gives up as promptly as a 30s one.
+      _wa_now=$(date +%s)
+      [ "${_WATCH_UNSURE_SINCE:-0}" -ne 0 ] || _WATCH_UNSURE_SINCE=$_wa_now
+      [ "$(( _wa_now - _WATCH_UNSURE_SINCE ))" -lt "${TMUX_WATCH_GRACE:-120}" ]
       ;;
     *)
       # A bare pid is a definite answer either way.
-      _WATCH_UNSURE=0
+      _WATCH_UNSURE_SINCE=0
       [ "$_wa_said" = "$_wa_want" ]
       ;;
   esac
@@ -173,15 +173,15 @@ _watch_running() {
 }
 
 # Remove state belonging to servers that no longer exist, so the directory does
-# not grow one entry per tmux server ever started. Only siblings for our own
-# socket are considered, and only when the pid in the name is gone -- another
-# live server's state is never touched.
+# not grow one entry per tmux server ever started. Every socket's leftovers are
+# considered, not just our own: a throwaway server on its own socket would
+# otherwise leave an entry nothing ever looks at again. Only entries whose pid is
+# gone are removed, so a live server's state is never touched.
 _watch_reap() {
   [ -n "${TMUX:-}" ] || return 0
-  _wrp_sock=$(printf '%s' "$TMUX" | cut -d, -f1 | tr '/' '_')
   _wrp_mine=$(_watch_key)
 
-  for _wrp_dir in "$TMUX_WATCH_DIR/$_wrp_sock"-*; do
+  for _wrp_dir in "$TMUX_WATCH_DIR"/*-*; do
     [ -d "$_wrp_dir" ] || continue
     if [ "$(basename "$_wrp_dir")" = "$_wrp_mine" ]; then
       continue                                      # that is us
@@ -195,6 +195,16 @@ _watch_reap() {
     fi
     rm -rf "$_wrp_dir"
   done
+}
+
+# Called from a watcher's EXIT trap: reap whatever the body backgrounded (an
+# fswatch and its pipeline, for the two file watchers) and drop our state
+# directory if we were the last watcher in it, so a server that has gone leaves
+# nothing behind at all.
+_watch_cleanup() {
+  pkill -P $$ 2>/dev/null || true
+  [ -n "${_WATCH_SELF:-}" ] || return 0
+  rmdir "$(dirname "$_WATCH_SELF")" 2>/dev/null || true
 }
 
 # watch_spawn NAME BODY -- start BODY detached unless NAME is already running.
@@ -259,17 +269,26 @@ watch_spawn() {
   rm -rf "$_ws_claim"
 }
 
-# Sourced by a watcher child rather than by a starter: arrange for its state file
-# to go away as it exits, so a watcher that has stopped leaves nothing for the
-# guard to examine. Set by watch_spawn, never by hand.
+# Sourced by a watcher child rather than by a starter: clean up after ourselves
+# as we exit, so a watcher that has stopped leaves neither state for the guard to
+# examine nor children of its own. Set by watch_spawn, never by hand.
 #
-# The signal traps exit explicitly rather than sharing the EXIT handler. A trap
-# that only cleans up and returns *swallows* the signal -- the loop carries on,
-# and the watcher becomes unkillable by anything short of SIGKILL. Exiting from
-# the handler runs the EXIT trap, so the state file still goes away.
+# Both jobs belong in the EXIT handler, because it is the one path every exit
+# goes through. Reaping only at the end of the body missed the signal path
+# entirely: a watcher told to stop removed its state file and left its `fswatch`
+# running forever, holding a marker the guard could no longer find.
+#
+# TERM exits explicitly rather than sharing the handler, for two reasons. A trap
+# that only cleans up and returns *swallows* the signal -- the loop carries on and
+# the watcher becomes unkillable by anything short of SIGKILL. And it is what
+# makes the cleanup portable: measured here, bash (so macOS /bin/sh) runs an EXIT
+# trap even for an untrapped SIGTERM, while dash (so /bin/sh on the CI runner) and
+# zsh do not, and exiting from the TERM handler is what reaches EXIT on those.
+#
+# There is deliberately no HUP or INT trap: nohup starts us with both inherited as
+# ignored, which a POSIX shell cannot then trap, so such handlers would be dead
+# code that merely looked load-bearing.
 if [ -n "${_WATCH_SELF:-}" ]; then
-  trap 'rm -f "$_WATCH_SELF"' EXIT
-  trap 'exit 129' HUP
-  trap 'exit 130' INT
+  trap 'rm -f "$_WATCH_SELF"; _watch_cleanup' EXIT
   trap 'exit 143' TERM
 fi

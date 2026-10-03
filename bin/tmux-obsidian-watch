@@ -24,9 +24,10 @@ command -v fswatch >/dev/null 2>&1 || exit 0
 export DAILY_DIR UPDATER
 
 # fswatch runs in the background and the watcher waits on watch_alive instead of
-# on fswatch -- see the long note in bin/tmux-color-watch for why round that way.
-# Polling watch_alive bounds the exit to one interval, and pkill -P reaps both
-# children, fswatch included; notes are still handled the moment they change.
+# on fswatch, and also on the pipeline so a dead fswatch is noticed rather than
+# leaving a watcher that looks healthy and does nothing -- see the long note in
+# bin/tmux-color-watch for both halves. Notes are still handled the moment they
+# change, and the library's exit handler reaps both children.
 #
 # -o: batch mode (coalesce rapid saves into one event)
 # -e "/Archive/": exclude archive subdirectory
@@ -35,5 +36,7 @@ watch_spawn tmux-obsidian-watch \
   'fswatch -o -e "/Archive/" "$DAILY_DIR" | while read -r _; do
      "$UPDATER"
    done &
-   while watch_alive; do sleep '"$INTERVAL"'; done
-   pkill -P $$ 2>/dev/null'
+   pipeline=$!
+   while watch_alive && kill -0 "$pipeline" 2>/dev/null; do
+     sleep '"$INTERVAL"'
+   done'

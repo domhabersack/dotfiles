@@ -18,7 +18,20 @@
 lock_live() {
   [ -d "$1" ] || return 1
   _lock_owner=$(cat "$1/pid" 2>/dev/null)
-  [ -n "$_lock_owner" ] && kill -0 "$_lock_owner" 2>/dev/null
+
+  # No owner recorded yet. mkdir and the write of "pid" are two steps, so this is
+  # most likely a holder caught between them -- and reading that as "stale" let a
+  # loser delete a claim that was very much alive. A lock that has only just
+  # appeared is therefore treated as held; one still empty after a minute is the
+  # genuine casualty of a run that died mid-acquire, and can be stolen.
+  if [ -z "$_lock_owner" ]; then
+    # Note the output test: find exits 0 whether or not anything matched, so its
+    # status says nothing about the lock's age.
+    [ -n "$(find "$1" -maxdepth 0 -mmin -1 2>/dev/null)" ] && return 0
+    return 1
+  fi
+
+  kill -0 "$_lock_owner" 2>/dev/null
 }
 
 lock_acquire() {

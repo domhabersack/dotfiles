@@ -61,6 +61,10 @@ MOCKFSW
   export OTHER_SOCK="$MOCK_DIR/other-socket"
   : > "$SOCK"
   : > "$OTHER_SOCK"
+  # A short grace period, so the "gave up waiting" paths are testable; the real
+  # default is two minutes.
+  export TMUX_WATCH_GRACE=2
+
   export TMUX="$SOCK,4242,0"
   export OTHER_TMUX="$OTHER_SOCK,777,0"
   echo 4242 > "$MOCK_DIR/pid-socket"
@@ -305,6 +309,11 @@ MOCKPS
   run watch_alive
   [ "$status" -eq 1 ]
 
+  # back to our own server, so the next assertion can only pass via the socket
+  # check and not via a pid mismatch
+  echo 4242 > "$MOCK_DIR/pid-socket"
+  run watch_alive
+  [ "$status" -eq 0 ]
   rm -f "$SOCK"                            # socket gone: the unambiguous case
   run watch_alive
   [ "$status" -eq 1 ]
@@ -331,34 +340,38 @@ MOCKPS
 }
 
 @test "a long run of inconclusive probes eventually ends the watcher" {
-  # a server killed outright leaves its socket behind and answers nothing; the
-  # watcher must not wait on it forever
-  # called directly, not via `run`: the inconclusive count lives in the calling
-  # shell, and `run` would evaluate each call in a subshell that discards it
+  # tmux does not unlink its socket when it exits, so a server that quit and was
+  # not replaced leaves one that answers nothing: only the grace period running
+  # out tells a watcher to stop. Called directly, not via `run`, because the
+  # "since when" timestamp lives in the calling shell and `run` would evaluate
+  # each call in a subshell that discards it.
   : > "$MOCK_DIR/server-flaky"
-  i=0
-  while [ "$i" -lt 19 ]; do
-    watch_alive || return 1
-    i=$((i + 1))
-  done
-  if watch_alive; then return 1; fi
+
+  watch_alive                       # first inconclusive probe starts the clock
+  sleep 1
+  watch_alive                       # still inside the 2s grace
+  sleep 2
+  if watch_alive; then return 1; fi  # grace exhausted
 }
 
-@test "one good probe resets the inconclusive count" {
+@test "one good probe resets the grace period" {
   : > "$MOCK_DIR/server-flaky"
-  i=0
-  while [ "$i" -lt 19 ]; do watch_alive || true; i=$((i + 1)); done
+  watch_alive                              # clock starts
+  sleep 2                                  # ... and would be exhausted next call
 
   rm -f "$MOCK_DIR/server-flaky"           # tmux answers again
-  watch_alive
+  watch_alive                              # definite answer: clock resets
 
-  : > "$MOCK_DIR/server-flaky"             # and the budget is full again
-  watch_alive
+  : > "$MOCK_DIR/server-flaky"
+  watch_alive                              # so this is inside a fresh grace
+  sleep 2
+  if watch_alive; then return 1; fi        # and the fresh grace still expires
 }
 
 @test "an fswatch-shaped watcher exits and leaves no fswatch behind" {
   # the defect this guards: reading fswatch's output directly meant the loop
   # noticed a dead server only on the next file event, and left fswatch running
+  # shellcheck disable=SC2016 # single-quoted on purpose: evaluated in the child
   watch_spawn fsdemo \
     'fswatch -o /dev/null | while read -r _; do :; done &
      while watch_alive; do sleep 0.1; done
@@ -374,6 +387,98 @@ MOCKPS
   [ "$status" -eq 0 ]
   run wait_for no_children "$pid"
   [ "$status" -eq 0 ]
+}
+
+@test "a watcher is killable by SIGTERM and cleans up as it goes" {
+  # the regression this guards: a trap that cleaned up and returned swallowed the
+  # signal, leaving a watcher that nothing short of SIGKILL could stop.
+  #
+  # Note this cannot fail on macOS for the *cleanup* half: bash runs an EXIT trap
+  # even for an untrapped SIGTERM, so removing the TERM trap still cleans up here.
+  # On dash -- /bin/sh on the CI runner -- it does not, which is where this half
+  # of the assertion earns its keep.
+  watch_spawn demo "$TICK"
+  pid=$(recorded_pid demo)
+  run wait_for has_marker "$pid" demo
+  [ "$status" -eq 0 ]
+
+  kill "$pid"
+  run wait_for pid_gone "$pid"
+  [ "$status" -eq 0 ]
+  run wait_for gone_file "$(pidfile_of demo)"
+  [ "$status" -eq 0 ]
+}
+
+@test "a watcher killed by SIGTERM still reaps its children" {
+  # the regression this guards: reaping only at the end of the body skipped the
+  # signal path, so a watcher told to stop left its fswatch running forever --
+  # holding a valid marker whose state file was gone, invisible to the guard
+  # shellcheck disable=SC2016 # single-quoted on purpose: evaluated in the child
+  watch_spawn fsdemo \
+    'fswatch -o /dev/null | while read -r _; do :; done &
+     pipeline=$!
+     while watch_alive && kill -0 "$pipeline" 2>/dev/null; do sleep 0.1; done'
+  pid=$(recorded_pid fsdemo)
+  run wait_for has_marker "$pid" fsdemo
+  [ "$status" -eq 0 ]
+  [ -n "$(pgrep -P "$pid" 2>/dev/null)" ]
+
+  kill "$pid"
+  run wait_for pid_gone "$pid"
+  [ "$status" -eq 0 ]
+  run wait_for no_children "$pid"
+  [ "$status" -eq 0 ]
+}
+
+@test "a watcher stops when the thing it supervises dies" {
+  # the regression this guards: backgrounding fswatch left nothing supervising
+  # it, so a watcher whose fswatch had died looked healthy to the guard and no
+  # reload could replace it -- the feature stayed dead silently
+  # shellcheck disable=SC2016 # single-quoted on purpose: evaluated in the child
+  watch_spawn fsdemo \
+    'fswatch -o /dev/null | while read -r _; do :; done &
+     pipeline=$!
+     while watch_alive && kill -0 "$pipeline" 2>/dev/null; do sleep 0.1; done'
+  pid=$(recorded_pid fsdemo)
+  run wait_for has_marker "$pid" fsdemo
+  [ "$status" -eq 0 ]
+
+  # kill the fswatch out from under it
+  for c in $(pgrep -P "$pid"); do
+    ps -o command= -p "$c" | grep -q fswatch && kill -9 "$c"
+  done
+
+  run wait_for pid_gone "$pid"
+  [ "$status" -eq 0 ]
+  run wait_for gone_file "$(pidfile_of fsdemo)"
+  [ "$status" -eq 0 ]
+}
+
+@test "the spawn claim is released once the watcher is up" {
+  watch_spawn demo "$TICK"
+  run wait_for gone_file "$(pidfile_of demo).claim/pid"
+  [ "$status" -eq 0 ]
+  [ ! -d "$(pidfile_of demo).claim" ]
+}
+
+@test "a watcher that never becomes recognisable does not wedge the claim" {
+  # the hold loop is bounded, so a child that exits immediately costs a moment
+  # and leaves the name free rather than claimed forever
+  watch_spawn gone 'exit 0'
+  [ ! -d "$(pidfile_of gone).claim" ]
+}
+
+@test "state left by a dead server on another socket is reaped too" {
+  # a throwaway server on its own socket would otherwise leave an entry that
+  # nothing ever looks at again
+  dead=31999
+  while kill -0 "$dead" 2>/dev/null; do dead=$((dead - 1)); done
+  other="$TMUX_WATCH_DIR/_some_other_socket-$dead"
+  mkdir -p "$other"; printf '1\n' > "$other/demo"
+
+  watch_spawn demo "$TICK"
+
+  [ ! -d "$other" ]
 }
 
 @test "outside tmux the state lands in the nosrv bucket and watch_alive is true" {

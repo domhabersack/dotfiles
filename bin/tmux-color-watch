@@ -23,13 +23,21 @@ export CONFIG
 # changes -- which for a config file can be months -- and fswatch itself would be
 # left running regardless, since it exits only when something writes to a closed
 # pipe. (fswatch's own --one-event does not help: it prints the event and keeps
-# running.) Polling watch_alive bounds the exit to one interval, and pkill -P
-# reaps both children, fswatch included. Events are still handled the moment
-# they arrive: nothing here polls the file.
+# running.) Events are still handled the moment they arrive: nothing here polls
+# the file, and the library's exit handler reaps both children.
+#
+# The loop also watches the pipeline itself. Backgrounding fswatch means nothing
+# supervises it, and a watcher whose fswatch had died would sit there looking
+# healthy to the guard, so no reload could replace it and the colours would just
+# stop updating. $! is the pipeline's reading end, which gets EOF and exits when
+# fswatch goes, making it a faithful stand-in for "is this still working".
+# Ending the loop lets the next reload start a fresh one.
 # shellcheck disable=SC2016 # single-quoted on purpose: $CONFIG/$INTERVAL expand in the child
 watch_spawn tmux-color-watch \
   'fswatch -o "$CONFIG" | while read -r _; do
      ~/.dotfiles/bin/tmux-color-windows
    done &
-   while watch_alive; do sleep '"$INTERVAL"'; done
-   pkill -P $$ 2>/dev/null'
+   pipeline=$!
+   while watch_alive && kill -0 "$pipeline" 2>/dev/null; do
+     sleep '"$INTERVAL"'
+   done'
