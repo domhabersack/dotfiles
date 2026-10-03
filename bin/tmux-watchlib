@@ -127,17 +127,28 @@ watch_alive() {
   case "$_wa_said" in
     ''|*[!0-9]*)
       # Not a pid, so we learned nothing this time. Keep going, but remember
-      # since when, and give up once the run of silence is longer than any
-      # plausible hiccup: that is what finally stops a watcher whose server quit
-      # without being replaced, and it is bounded in time rather than in ticks so
+      # since when, and give up once the silence has run long enough to be more
+      # than a hiccup: that is what finally stops a watcher whose server quit
+      # without being replaced, and bounding it in time rather than in ticks means
       # a 60s watcher gives up as promptly as a 30s one.
+      #
+      # Elapsed time alone is not enough, because the clock is not a count of how
+      # often we looked. A laptop suspended between two probes comes back with
+      # hours of wall time added, and a watcher that had seen exactly one
+      # inconclusive probe before the lid closed would give up on the first one
+      # after it -- killing all eight watchers on a healthy server over a single
+      # sleep/wake. So a minimum number of probes has to have failed as well.
       _wa_now=$(date +%s)
       [ "${_WATCH_UNSURE_SINCE:-0}" -ne 0 ] || _WATCH_UNSURE_SINCE=$_wa_now
-      [ "$(( _wa_now - _WATCH_UNSURE_SINCE ))" -lt "${TMUX_WATCH_GRACE:-120}" ]
+      _WATCH_UNSURE_N=$(( ${_WATCH_UNSURE_N:-0} + 1 ))
+
+      [ "$(( _wa_now - _WATCH_UNSURE_SINCE ))" -lt "${TMUX_WATCH_GRACE:-120}" ] ||
+        [ "$_WATCH_UNSURE_N" -lt "${TMUX_WATCH_MIN_PROBES:-3}" ]
       ;;
     *)
-      # A bare pid is a definite answer either way.
+      # A bare pid is a definite answer either way, and resets both counters.
       _WATCH_UNSURE_SINCE=0
+      _WATCH_UNSURE_N=0
       [ "$_wa_said" = "$_wa_want" ]
       ;;
   esac
@@ -203,8 +214,8 @@ _watch_reap() {
 # nothing behind at all.
 _watch_cleanup() {
   pkill -P $$ 2>/dev/null || true
-  [ -n "${_WATCH_SELF:-}" ] || return 0
-  rmdir "$(dirname "$_WATCH_SELF")" 2>/dev/null || true
+  [ -n "${_watch_state_file:-}" ] || return 0
+  rmdir "$(dirname "$_watch_state_file")" 2>/dev/null || true
 }
 
 # watch_spawn NAME BODY -- start BODY detached unless NAME is already running.
@@ -285,10 +296,21 @@ watch_spawn() {
 # trap even for an untrapped SIGTERM, while dash (so /bin/sh on the CI runner) and
 # zsh do not, and exiting from the TERM handler is what reaches EXIT on those.
 #
-# There is deliberately no HUP or INT trap: nohup starts us with both inherited as
-# ignored, which a POSIX shell cannot then trap, so such handlers would be dead
-# code that merely looked load-bearing.
+# There is deliberately no HUP or INT trap: both arrive inherited-as-ignored,
+# which a POSIX shell cannot then trap, so such handlers would be dead code that
+# merely looked load-bearing. Note where each comes from, because they are not the
+# same: nohup ignores HUP, while INT is ignored because this is an asynchronous
+# command started with job control off -- a property of the `&` on the spawn, not
+# of nohup. Drop the `&` and INT becomes trappable again.
 if [ -n "${_WATCH_SELF:-}" ]; then
-  trap 'rm -f "$_WATCH_SELF"; _watch_cleanup' EXIT
+  # Copied to a shell variable and dropped from the environment: it arrives as an
+  # export, so every descendant would otherwise inherit it, and any descendant
+  # that happened to source this library would install these traps and delete the
+  # watcher's state file when it exited. Nothing does today; this keeps it that
+  # way by construction rather than by luck.
+  _watch_state_file=$_WATCH_SELF
+  unset _WATCH_SELF
+
+  trap 'rm -f "$_watch_state_file"; _watch_cleanup' EXIT
   trap 'exit 143' TERM
 fi

@@ -107,7 +107,10 @@ recorded_pid() { cat "$(pidfile_of "$1")" 2>/dev/null; }
 pid_gone()     { ! kill -0 "$1" 2>/dev/null; }
 has_marker()   { ps -o command= -p "$1" 2>/dev/null | grep -q "tmux-watch=$2@"; }
 spawned()      { [ -n "$(recorded_pid "$1")" ]; }
-no_children()  { [ -z "$(pgrep -P "$1" 2>/dev/null)" ]; }
+# Children of a dead process are reparented to pid 1, so `pgrep -P <dead pid>` is
+# empty whether they were reaped or orphaned. Capture the pids while the parent
+# lives, then assert on those pids directly.
+all_gone()     { for _p in $1; do kill -0 "$_p" 2>/dev/null && return 1; done; return 0; }
 gone_file()    { [ ! -f "$1" ]; }
 # state dir for our socket but another server pid, without hardcoding the key
 sib_dir()      { printf '%s/%s-%s' "$TMUX_WATCH_DIR" "$(printf '%s' "$SOCK" | tr '/' '_')" "$1"; }
@@ -322,10 +325,11 @@ MOCKPS
 @test "an inconclusive probe does not kill the watcher" {
   # the regression this guards: treating any failed probe as "server gone" made
   # watchers die off whenever the machine was too busy for tmux to answer
-  # a one-second tick, so the 20 inconclusive ticks this watcher is allowed take
-  # far longer than the wait below -- with the 0.1s tick the budget runs out in
-  # two seconds on a fast machine and the test measures the wrong thing
-  watch_spawn demo 'while watch_alive; do sleep 1; done'
+  # A grace well clear of the wait below: sleeping for exactly one grace period
+  # asserts liveness at the instant it expires, which fails whenever the watcher
+  # gets scheduled first (observed roughly one run in twelve).
+  TMUX_WATCH_GRACE=10 \
+    watch_spawn demo 'while watch_alive; do sleep 1; done'
   pid=$(recorded_pid demo)
   run wait_for has_marker "$pid" demo
   [ "$status" -eq 0 ]
@@ -356,16 +360,29 @@ MOCKPS
 
 @test "one good probe resets the grace period" {
   : > "$MOCK_DIR/server-flaky"
-  watch_alive                              # clock starts
+  watch_alive                              # clock starts, 1 failed probe
   sleep 2                                  # ... and would be exhausted next call
 
   rm -f "$MOCK_DIR/server-flaky"           # tmux answers again
-  watch_alive                              # definite answer: clock resets
+  watch_alive                              # definite answer: resets clock AND count
 
   : > "$MOCK_DIR/server-flaky"
-  watch_alive                              # so this is inside a fresh grace
+  watch_alive                              # so we are inside a fresh grace again
+  watch_alive
   sleep 2
   if watch_alive; then return 1; fi        # and the fresh grace still expires
+}
+
+@test "elapsed time alone does not end a watcher" {
+  # the regression this guards: a suspended laptop comes back with hours of wall
+  # time added, and a watcher that had seen one inconclusive probe before the lid
+  # closed would have given up on the first one after it -- on a healthy server
+  : > "$MOCK_DIR/server-flaky"
+  watch_alive                              # one failed probe, clock starts
+  sleep 2                                  # longer than the whole grace
+
+  # the clock is exhausted, but one more failed probe is not enough to conclude
+  watch_alive
 }
 
 @test "an fswatch-shaped watcher exits and leaves no fswatch behind" {
@@ -374,18 +391,19 @@ MOCKPS
   # shellcheck disable=SC2016 # single-quoted on purpose: evaluated in the child
   watch_spawn fsdemo \
     'fswatch -o /dev/null | while read -r _; do :; done &
-     while watch_alive; do sleep 0.1; done
-     pkill -P $$ 2>/dev/null'
+     pipeline=$!
+     while watch_alive && kill -0 "$pipeline" 2>/dev/null; do sleep 0.1; done'
   pid=$(recorded_pid fsdemo)
   run wait_for has_marker "$pid" fsdemo
   [ "$status" -eq 0 ]
-  [ -n "$(pgrep -P "$pid" 2>/dev/null)" ]        # fswatch is running under it
+  kids=$(pgrep -P "$pid")
+  [ -n "$kids" ]                                 # fswatch is running under it
 
   rm -f "$MOCK_DIR/pid-socket" "$SOCK"
 
   run wait_for pid_gone "$pid"
   [ "$status" -eq 0 ]
-  run wait_for no_children "$pid"
+  run wait_for all_gone "$kids"
   [ "$status" -eq 0 ]
 }
 
@@ -421,12 +439,13 @@ MOCKPS
   pid=$(recorded_pid fsdemo)
   run wait_for has_marker "$pid" fsdemo
   [ "$status" -eq 0 ]
-  [ -n "$(pgrep -P "$pid" 2>/dev/null)" ]
+  kids=$(pgrep -P "$pid")
+  [ -n "$kids" ]
 
   kill "$pid"
   run wait_for pid_gone "$pid"
   [ "$status" -eq 0 ]
-  run wait_for no_children "$pid"
+  run wait_for all_gone "$kids"
   [ "$status" -eq 0 ]
 }
 
