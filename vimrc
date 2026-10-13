@@ -300,6 +300,21 @@ require('mason-lspconfig').setup({
   },
 })
 
+-- Mason also installs tools that are not language servers. conform.nvim (format on
+-- save below) uses a project's own prettier when there is one and otherwise falls
+-- back to this global copy, so markdown/JSON/etc. format in every project.
+local mason_registry = require('mason-registry')
+mason_registry.refresh(function()
+  for _, tool in ipairs({ 'prettier' }) do
+    if mason_registry.has_package(tool) then
+      local package = mason_registry.get_package(tool)
+      if not package:is_installed() then
+        package:install()
+      end
+    end
+  end
+end)
+
 local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
 local on_attach = function(_, bufnr)

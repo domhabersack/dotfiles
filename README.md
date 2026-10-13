@@ -449,6 +449,7 @@ On first shell/editor start, plugins install themselves automatically:
 - **fzf** + **fzf-tab** + **zsh-autosuggestions** + **zsh-syntax-highlighting** — cloned by `zshrc` on first shell start (same pattern as TPM in `tmux.conf`).
 - **vim-plug** — bootstrapped by `vimrc` on first `nvim` launch; all plugins install automatically.
 - **Language servers** (tsserver, tailwindcss, eslint, cssls, html, jsonls) — installed by mason on the second `nvim` launch.
+- **Prettier** — installed globally by mason on `nvim` launch, so format on save works in projects that don't have their own copy.
 
 ### Optional tools
 
