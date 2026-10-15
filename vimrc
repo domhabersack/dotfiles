@@ -225,7 +225,9 @@ vim.keymap.set('n', '<C-n>', '<cmd>NvimTreeToggle<CR>')
 nvim_tree.setup({
   view = { width = 48 },
   update_focused_file = { enable = true },
-  filters = { custom = { '^\\.git$' } },   -- dotfiles stay visible, .git itself does not
+  -- gitignored files stay visible (machine-local files like window-colors are
+  -- ignored but still need editing); dotfiles stay visible, .git itself does not
+  filters = { git_ignored = false, custom = { '^\\.git$' } },
   renderer = {
     add_trailing = true,                   -- trailing "/" marks directories
     indent_markers = {
