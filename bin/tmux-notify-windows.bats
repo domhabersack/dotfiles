@@ -31,7 +31,7 @@ case "$1" in
       sess="$3"
       while IFS='	' read -r s wid flag name; do
         [ "$s" = "$sess" ] || continue
-        printf '%s\t%s\t%s\n' "$flag" "$(bell_at_of "$wid")" "$name"
+        printf '%s\t%s\t%s\t%s\n' "$flag" "$(bell_at_of "$wid")" "$wid" "$name"
       done < "$MOCK_DIR/windows"
     fi
     ;;
@@ -82,7 +82,7 @@ captured_for() {
   add_window work @2 1 100 api
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 api · codeshots#[default]')" ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@2]api#[norange] · #[range=user|@1]codeshots#[norange]#[default]')" ]
 }
 
 @test "sets an empty status-right when no window has a pending bell" {
@@ -100,7 +100,7 @@ captured_for() {
   add_window play @2 0 "" beta
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 alpha#[default]')" ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]alpha#[norange]#[default]')" ]
   [ "$(captured_for play)" = "" ]
 }
 
@@ -109,7 +109,7 @@ captured_for() {
   add_window work @1 1 100 my long window
   run "$SCRIPT"
   [ "$status" -eq 0 ]
-  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 my long window#[default]')" ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]my long window#[norange]#[default]')" ]
 }
 
 @test "sets status-right for every session even when only some have bells" {
@@ -119,7 +119,7 @@ captured_for() {
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(captured_for work)" = "" ]
-  [ "$(captured_for play)" = "$(printf '#[fg=colour1]🔔 gamma#[default]')" ]
+  [ "$(captured_for play)" = "$(printf '#[fg=colour1]🔔 #[range=user|@2]gamma#[norange]#[default]')" ]
 }
 
 @test "stamps a freshly-ringing window's queue position" {
@@ -128,7 +128,7 @@ captured_for() {
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ -s "$MOCK_DIR/bellat_@1" ]
-  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 fresh#[default]')" ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]fresh#[norange]#[default]')" ]
 }
 
 @test "does not restamp a window that is still ringing" {

@@ -38,10 +38,12 @@ done
 tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r sess; do
   # This session's windows with a pending bell, oldest ring first (ascending
   # @bell_at), ' · '-joined. Tab-separated so a window name containing spaces
-  # stays intact when we cut it back out below.
-  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag}	#{@bell_at}	#{window_name}' 2>/dev/null |
-    awk -F'	' '$1 == 1' | sort -t'	' -k2,2n | cut -f3 |
-    while IFS= read -r name; do printf '%s · ' "$name"; done)
+  # stays intact when we cut it back out below. Each name is wrapped in a
+  # range=user marked with its window id (e.g. "@12") so a click on it can
+  # select that window — see the MouseDown1Status binding in tmux.conf.
+  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag}	#{@bell_at}	#{window_id}	#{window_name}' 2>/dev/null |
+    awk -F'	' '$1 == 1' | sort -t'	' -k2,2n | cut -f3- |
+    while IFS='	' read -r wid name; do printf '#[range=user|%s]%s#[norange] · ' "$wid" "$name"; done)
   names=${names% · }
 
   if [ -n "$names" ]; then
