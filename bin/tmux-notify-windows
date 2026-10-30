@@ -6,6 +6,11 @@
 # list (window_bell_flag; e.g. Claude Code waiting for input) and clears when you
 # visit the window.
 #
+# A window sitting in a linked git worktree gets that worktree’s badge right
+# after its name (same look as the status row’s: ◀ name on @badge_bg/@badge_fg,
+# see tmux.conf), so "ewi-service" rings as "ewi-service ◀ fix-loop" and two
+# windows named after the same repo can be told apart.
+#
 # Windows are listed oldest-ring-first — left to right in the order they
 # started wanting attention — via the @bell_at timestamp stamped below, so
 # #{window_index} (which bin/tmux-sort-windows keeps alphabetical) never
@@ -35,15 +40,31 @@ while IFS=' ' read -r flag wid stamp; do
   fi
 done
 
+# Badge colors come from the same options the status row uses, with the same
+# defaults as tmux.conf, so a theme that retunes them is followed here too.
+badge_bg=$(tmux show-option -gqv @badge_bg 2>/dev/null) || badge_bg=''
+badge_fg=$(tmux show-option -gqv @badge_fg 2>/dev/null) || badge_fg=''
+badge_bg=${badge_bg:-colour254}
+badge_fg=${badge_fg:-colour232}
+
 tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r sess; do
   # This session's windows with a pending bell, oldest ring first (ascending
   # @bell_at), ' · '-joined. Tab-separated so a window name containing spaces
-  # stays intact when we cut it back out below. Each name is wrapped in a
-  # range=user marked with its window id (e.g. "@12") so a click on it can
-  # select that window — see the MouseDown1Status binding in tmux.conf.
-  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag}	#{@bell_at}	#{window_id}	#{window_name}' 2>/dev/null |
+  # stays intact when we cut it back out below. Each entry (the name plus its
+  # worktree badge, if it has one) is wrapped in a range=user marked with its
+  # window id (e.g. "@12") so a click on either selects that window — see the
+  # MouseDown1Status binding in tmux.conf. The badge ends by restoring the red
+  # the entries share with an explicit bg/fg rather than #[default], which
+  # would otherwise end the red for the rest of the list.
+  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag}	#{@bell_at}	#{window_id}	#{window_name}	#{@worktree_name}' 2>/dev/null |
     awk -F'	' '$1 == 1' | sort -t'	' -k2,2n | cut -f3- |
-    while IFS='	' read -r wid name; do printf '#[range=user|%s]%s#[norange] · ' "$wid" "$name"; done)
+    while IFS='	' read -r wid name worktree; do
+      printf '#[range=user|%s]%s' "$wid" "$name"
+      if [ -n "$worktree" ]; then
+        printf '#[fg=%s]◀#[bg=%s]#[fg=%s] %s #[bg=default]#[fg=colour1]' "$badge_bg" "$badge_bg" "$badge_fg" "$worktree"
+      fi
+      printf '#[norange] · '
+    done)
   names=${names% · }
 
   if [ -n "$names" ]; then
