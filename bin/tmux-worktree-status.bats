@@ -17,8 +17,9 @@ setup() {
 
 here_of() { "$SCRIPT" "$1" | sed -n '1p'; }
 pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
+name_of() { "$SCRIPT" "$1" | sed -n '3p'; }
 
-@test "prints two empty lines outside a git work tree" {
+@test "prints three empty lines outside a git work tree" {
   run "$SCRIPT" "$BATS_TEST_TMPDIR"
   [ "$status" -eq 0 ]
   [ "$output" = "$(printf '\n')" ]
@@ -28,6 +29,18 @@ pending_of() { "$SCRIPT" "$1" | sed -n '2p'; }
   GIT worktree add -q -b feature "$REPO/.worktrees/feature"
   [ "$(here_of "$REPO/.worktrees/feature")" = "⎇ " ]
   [ -z "$(pending_of "$REPO/.worktrees/feature")" ]
+}
+
+@test "names a linked worktree after its directory, even from a subdirectory" {
+  GIT worktree add -q -b feature "$REPO/.worktrees/feature"
+  mkdir "$REPO/.worktrees/feature/sub"
+  [ "$(name_of "$REPO/.worktrees/feature")" = "feature" ]
+  [ "$(name_of "$REPO/.worktrees/feature/sub")" = "feature" ]
+}
+
+@test "gives the main worktree no name" {
+  GIT worktree add -q -b feature "$REPO/.worktrees/feature"
+  [ -z "$(name_of "$REPO")" ]
 }
 
 @test "marks the main worktree with a pending count when linked worktrees exist" {
