@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prints two lines for the directory given as $1 (default: the current
+# Prints three lines for the directory given as $1 (default: the current
 # directory), one per window option bin/tmux-worktree-status-windows stamps:
 #
 #   line 1 (@worktree_here)    "⎇ " (with a trailing space, so it never
@@ -12,10 +12,13 @@
 #                              (created by `git-worktree-new`, not yet
 #                              cleaned up with `git worktree remove`), empty
 #                              otherwise.
+#   line 3 (@worktree_name)    the linked worktree’s directory name (the
+#                              basename of its toplevel, so it stays right
+#                              from a subdirectory), empty whenever line 1 is.
 #
 # A window is either "in a linked worktree" or "in the main worktree with
-# outstanding ones to clean up" or neither -- never both -- so the two lines
-# are mutually exclusive in practice, but both are always printed (empty or
+# outstanding ones to clean up" or neither -- never both -- so the first two lines
+# are mutually exclusive in practice, but all three are always printed (empty or
 # not) so a caller can reliably read them positionally.
 #
 # The "here" signal resolves the main root via bin/git-worktree-root, not
@@ -35,7 +38,7 @@ set -eu
 
 dir=${1:-.}
 
-git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { printf '\n\n'; exit 0; }
+git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { printf '\n\n\n'; exit 0; }
 
 main_root=$("$(dirname "$0")/git-worktree-root" "$dir" 2>/dev/null) || main_root=""
 other_count=$(git -C "$dir" worktree list --porcelain | awk '/^worktree /{n++} END{print n-1}')
@@ -44,12 +47,14 @@ toplevel=$(git -C "$dir" rev-parse --path-format=absolute --show-toplevel 2>/dev
 
 here=""
 pending=""
+name=""
 if [ -n "$toplevel" ]; then
   if [ -n "$main_root" ] && [ "$toplevel" = "$main_root" ]; then
     [ "$other_count" -gt 0 ] && pending="⎇ $other_count"
   else
     here="⎇ "
+    name=$(basename "$toplevel")
   fi
 fi
 
-printf '%s\n%s\n' "$here" "$pending"
+printf '%s\n%s\n%s\n' "$here" "$pending" "$name"

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Stamps every window with @worktree_here and @worktree_pending (see
+# Stamps every window with @worktree_here, @worktree_pending and
+# @worktree_name (see
 # bin/tmux-worktree-status) from its active pane’s path -- so status-format[1]
 # and the choose-tree format (prefix w) can show "repo ⎇ feat/foo" (branch
 # prefixed with the fork glyph) for a window sitting in a linked worktree,
@@ -30,8 +31,10 @@ while read -r wid path; do
   fi
   here=$(printf '%s\n' "$out" | sed -n '1p')
   pending=$(printf '%s\n' "$out" | sed -n '2p')
+  name=$(printf '%s\n' "$out" | sed -n '3p')
   tmux set-window-option -t "$wid" @worktree_here "$here"
   tmux set-window-option -t "$wid" @worktree_pending "$pending"
+  tmux set-window-option -t "$wid" @worktree_name "$name"
 done
 
 # Repaint so freshly-set labels show immediately, not on the next tick.

@@ -31,7 +31,7 @@ case "$1" in
       sess="$3"
       while IFS='	' read -r s wid flag name; do
         [ "$s" = "$sess" ] || continue
-        printf '%s\t%s\t%s\t%s\n' "$flag" "$(bell_at_of "$wid")" "$wid" "$name"
+        printf '%s\t%s\t%s\t%s\t%s\n' "$flag" "$(bell_at_of "$wid")" "$wid" "$name" "$(cat "$MOCK_DIR/worktree_$wid" 2>/dev/null || true)"
       done < "$MOCK_DIR/windows"
     fi
     ;;
@@ -47,6 +47,10 @@ case "$1" in
   set-option)
     # args: set-option -t <sess> status-right <value>
     printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured"
+    ;;
+  show-option)
+    # args: show-option -gqv @badge_bg|@badge_fg -- canned per test, empty by default
+    cat "$MOCK_DIR/option_$3" 2>/dev/null || true
     ;;
   refresh-client) : ;;
   *) : ;;
@@ -65,6 +69,11 @@ add_window() {
   sess=$1; wid=$2; flag=$3; bell_at=$4; shift 4
   printf '%s\t%s\t%s\t%s\n' "$sess" "$wid" "$flag" "$*" >> "$MOCK_DIR/windows"
   if [ -n "$bell_at" ]; then printf '%s' "$bell_at" > "$MOCK_DIR/bellat_$wid"; fi
+}
+
+# set_worktree <window-id> <worktree-name>
+set_worktree() {
+  printf '%s' "$2" > "$MOCK_DIR/worktree_$1"
 }
 
 set_sessions() {
@@ -145,4 +154,34 @@ captured_for() {
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -f "$MOCK_DIR/bellat_@1" ]
+}
+
+@test "follows a window name with its worktree badge" {
+  set_sessions work
+  add_window work @1 1 100 ewi-service
+  set_worktree @1 fix-loop
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]ewi-service#[fg=colour254]◀#[bg=colour254]#[fg=colour232] fix-loop #[bg=default]#[fg=colour1]#[norange]#[default]')" ]
+}
+
+@test "keeps the red going and the click range intact around a badge, and badges only the worktree windows" {
+  set_sessions work
+  add_window work @1 1 100 ewi-service
+  add_window work @2 1 200 codeshots
+  set_worktree @1 fix-loop
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]ewi-service#[fg=colour254]◀#[bg=colour254]#[fg=colour232] fix-loop #[bg=default]#[fg=colour1]#[norange] · #[range=user|@2]codeshots#[norange]#[default]')" ]
+}
+
+@test "uses the badge colors from @badge_bg and @badge_fg" {
+  set_sessions work
+  add_window work @1 1 100 ewi-service
+  set_worktree @1 fix-loop
+  printf '%s' colour240 > "$MOCK_DIR/option_@badge_bg"
+  printf '%s' colour255 > "$MOCK_DIR/option_@badge_fg"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]ewi-service#[fg=colour240]◀#[bg=colour240]#[fg=colour255] fix-loop #[bg=default]#[fg=colour1]#[norange]#[default]')" ]
 }
