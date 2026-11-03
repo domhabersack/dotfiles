@@ -56,6 +56,24 @@ EOF
   [ "$(line_of 1)" = "1|U|daemon|Nov 3 14:09|s" ]
 }
 
+@test "takes the sender from a bare address, with or without a trailing (comment)" {
+  cat > "$MAIL" <<'EOF'
+From x  Tue Nov  3 14:09:01 2026
+From: habersackd@host.local (Dominik Habersack)
+Subject: s
+
+b
+
+From y  Tue Nov  3 14:10:00 2026
+From: agent@host.local
+Subject: s
+
+b
+EOF
+  [ "$(line_of 1)" = "1|U|habersackd|Nov 3 14:09|s" ]
+  [ "$(line_of 2)" = "2|U|agent|Nov 3 14:10|s" ]
+}
+
 @test "falls back to the envelope sender without a From: header" {
   cat > "$MAIL" <<'EOF'
 From root@host  Tue Nov  3 14:09:01 2026

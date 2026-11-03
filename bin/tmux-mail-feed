@@ -11,7 +11,8 @@
 #            which is also the case for a message with no Status: header at
 #            all), R when it has
 #   sender   the local part of the From: header’s address (agent@host -> agent),
-#            falling back to the envelope sender
+#            whether it is written "Name <agent@host>" or, as postfix does for
+#            local mail, "agent@host (Name)"; falling back to the envelope sender
 #   date     the envelope date, "Nov 3 14:09", in local time
 #
 # With `--body N`, prints message N instead -- From/Date/Subject, a blank line,
@@ -42,7 +43,8 @@ awk -v mode="$mode" -v want="$want" '
 BEGIN { us = sprintf("%c", 31); n = 0; prevblank = 1 }
 
 function sender_of(from, env,   a) {
-  a = from
+  a = value_of(from)
+  gsub(/\([^)]*\)/, "", a)
   if (match(a, /<[^>]*>/)) a = substr(a, RSTART + 1, RLENGTH - 2)
   sub(/@.*/, "", a)
   gsub(/^[ \t"]+|[ \t"]+$/, "", a)
