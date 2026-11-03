@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stamps every window with @worktree_here and @worktree_name (see
-# bin/tmux-worktree-status) from its active pane’s path -- so status-format[1]
+# bin/tmux-worktree-status) from its active pane’s path -- so the status bar
 # and the choose-tree format (prefix w) can show the worktree’s badge for a
 # window sitting in a linked worktree.
 #

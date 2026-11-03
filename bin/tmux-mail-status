@@ -2,9 +2,11 @@
 # Sets the global option @mail to the footer’s mail indicator -- unread
 # messages counted per sender, "📧 agent (2) · daemon (1)", senders in the
 # order their first unread message arrived -- or to nothing when there is no
-# unread mail. status-format[1] in tmux.conf draws it on the right of the top
-# row, after the 🔔 list; a click on it opens the mail popup (the range tag is
-# "mail", see the MouseDown1Status binding).
+# unread mail. Alongside it, @mail_short holds just the total, "📧 3", which
+# the footer shows instead on a client narrower than @footer_narrow. The
+# footer's top row (the separator rule, see status-format[0] in tmux.conf)
+# draws one of them after the window name; a click on it opens the mail popup
+# (the range tag is "mail", see the MouseDown1Status binding).
 #
 # Global rather than per-session, unlike the bell list in status-right: the
 # mailbox belongs to the user, not to any one tmux session, so every client
@@ -23,19 +25,26 @@ summary=$("$feed" | awk -F "$us" '
   $2 == "U" {
     if (!($3 in count)) order[++senders] = $3
     count[$3]++
+    total++
   }
   END {
+    if (total) printf "%d ", total
     for (i = 1; i <= senders; i++) {
       printf "%s%s (%d)", (i > 1 ? " · " : ""), order[i], count[order[i]]
     }
   }
 ')
 
+# The total leads the summary, split off here: "3 agent (2) · daemon (1)".
 value=''
+short=''
 if [ -n "$summary" ]; then
+  total=${summary%% *}
+  summary=${summary#* }
   # # starts a tmux style sequence, so a literal one in a sender name is doubled.
   summary=$(printf '%s' "$summary" | sed 's/#/##/g')
   value="#[range=user|mail]📧 $summary#[norange]"
+  short="#[range=user|mail]📧 $total#[norange]"
 fi
 
 current=$(tmux show-option -gqv @mail 2>/dev/null) || current=''
@@ -46,6 +55,9 @@ if [ "$isUnchanged" = true ]; then
   exit 0
 fi
 
+# The short form first: it follows from the same count, so it can only be
+# stale when @mail is too, and @mail is what the check above compares.
+tmux set-option -g @mail_short "$short"
 tmux set-option -g @mail "$value"
 
 # `|| true` so a run with no client attached (nothing to repaint) doesn't fail

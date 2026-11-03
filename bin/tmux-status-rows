@@ -1,18 +1,17 @@
 #!/bin/sh
 # Sizes the status bar to what's actually on it, so there's never an empty
 # trailing row. Two independent content rows can appear or disappear:
-#   @branch_pr — the active window's branch PR status (status-format[2] when
-#                present); see bin/tmux-branch-pr
+#   @branch_pr — the active window's branch PR status; see bin/tmux-branch-pr
 #   @repo_pr   — the active repo's PR/vulnerability health; see bin/tmux-repo-pr
-# The separator (status-format[0]) and the name+branch row (status-format[1])
-# always show. So the bar is:
+# The top row (the separator rule with the window's name and branch in it) and
+# the bottom row (the bell list) always show. So the bar is:
 #   2 rows — neither content row has anything
 #   3 rows — exactly one of them does
 #   4 rows — both do
-# The PR row sits above the health row; when there's no PR row, the health row
-# slides up into status-format[2]. That row-slot juggling is done by the
-# #{?@branch_pr,...} conditionals in tmux.conf's status-format; here we only set
-# the height.
+# The content rows sit between those two, the health row above the PR row, so
+# the bell list stays on the bottom edge whatever the height. That row-slot
+# juggling is done by the #{?@repo_pr,...} conditionals in tmux.conf's
+# status-format; here we only set the height.
 #
 # Global, matching the rest of the status-height handling (the startup default
 # and the pane-mode-changed hook all use `set -g status`): the one global bar

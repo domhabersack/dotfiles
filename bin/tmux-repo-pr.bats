@@ -35,8 +35,12 @@ case "$1" in
     while IFS= read -r ln; do printf '%s\n' "$ln"; done < "$file"
     ;;
   set-window-option)
-    # $1=set-window-option $2=-t $3=wid $4=@repo_pr $5=value
-    printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured"
+    # $1=set-window-option $2=-t $3=wid $4=@repo_pr|@repo_pr_short $5=value
+    if [ "$4" = @repo_pr_short ]; then
+      printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured_short"
+    else
+      printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured"
+    fi
     ;;
   *) : ;;
 esac
@@ -56,6 +60,10 @@ add_window() {
 
 captured_for() {
   grep "^$1	" "$MOCK_DIR/captured" | cut -f2-
+}
+
+captured_short_for() {
+  grep "^$1	" "$MOCK_DIR/captured_short" | cut -f2-
 }
 
 write_cache() {
@@ -237,4 +245,44 @@ write_cache() {
     *"1 vulnerability#[nobold]"*) : ;;
     *) false ;;
   esac
+}
+
+# A window on a git repo with a GitHub origin, at $BATS_TEST_TMPDIR/repo.
+add_repo_window() {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  git init -q "$BATS_TEST_TMPDIR/repo"
+  git -C "$BATS_TEST_TMPDIR/repo" remote add origin https://github.com/example-owner/example-repo.git
+}
+
+@test "sets a short form with the PR count alone and abbreviated severities" {
+  add_repo_window
+  write_cache example-owner/example-repo ok 3 2 1 ok 3 2 1
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_short_for '@1')" = "$(printf '#[range=user|repo_pr]#[bold]3 PRs#[nobold]#[norange] · #[bold]3 vulns#[nobold] (#[fg=colour196]2 crit#[default], #[fg=colour208]1 high#[default])')" ]
+}
+
+@test "short form: singular labels, and the clean states" {
+  add_repo_window
+  write_cache example-owner/example-repo ok 1 1 0 ok 1 0 1
+  run "$SCRIPT"
+  [ "$(captured_short_for '@1')" = "$(printf '#[range=user|repo_pr]#[bold]1 PR#[nobold]#[norange] · #[bold]1 vuln#[nobold] (#[fg=colour208]1 high#[default])')" ]
+  : > "$MOCK_DIR/captured_short"
+  write_cache example-owner/example-repo ok 0 0 0 ok 0 0 0
+  run "$SCRIPT"
+  [ "$(captured_short_for '@1')" = "no PRs · no vulns" ]
+}
+
+@test "short form: Dependabot off" {
+  add_repo_window
+  write_cache example-owner/example-repo error 0 0 0 disabled 0 0 0
+  run "$SCRIPT"
+  [ "$(captured_short_for '@1')" = "$(printf '#[fg=colour214]no dependabot#[default]')" ]
+}
+
+@test "short form: the loading indicator too, so it never shows another repo's" {
+  add_repo_window
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_short_for '@1')" = "$(printf '#[fg=colour4]…#[default]')" ]
 }

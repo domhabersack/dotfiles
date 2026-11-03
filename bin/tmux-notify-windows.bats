@@ -10,7 +10,8 @@ setup() {
   # Mock tmux: serves canned list-sessions / list-windows output from windows
   # this test adds, tracks each window's @bell_at in its own bellat_<id> file
   # (so set-window-option can read-modify-write it), records set-option calls
-  # into $MOCK_DIR/captured, and no-ops refresh-client. Only shell builtins so
+  # into $MOCK_DIR/captured (status-right) and $MOCK_DIR/captured_short
+  # (@bells_short), and no-ops refresh-client. Only shell builtins so
   # it needs no external tools on PATH.
   cat > "$MOCK_DIR/bin/tmux" <<'EOF'
 #!/bin/sh
@@ -45,8 +46,12 @@ case "$1" in
     fi
     ;;
   set-option)
-    # args: set-option -t <sess> status-right <value>
-    printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured"
+    # args: set-option -t <sess> status-right|@bells_short <value>
+    if [ "$4" = status-right ]; then
+      printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured"
+    else
+      printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured_short"
+    fi
     ;;
   show-option)
     # args: show-option -gqv @badge_bg|@badge_fg -- canned per test, empty by default
@@ -60,6 +65,7 @@ EOF
   : > "$MOCK_DIR/sessions"
   : > "$MOCK_DIR/windows"
   : > "$MOCK_DIR/captured"
+  : > "$MOCK_DIR/captured_short"
 
   PATH="$MOCK_DIR/bin:$PATH"
 }
@@ -83,6 +89,11 @@ set_sessions() {
 # the last status-right value set for a session
 captured_for() {
   grep "^$1	" "$MOCK_DIR/captured" | tail -1 | cut -f2-
+}
+
+# the last @bells_short value set for a session
+captured_short_for() {
+  grep "^$1	" "$MOCK_DIR/captured_short" | tail -1 | cut -f2-
 }
 
 @test "lists the bell windows oldest ring first, not insertion order" {
@@ -184,4 +195,40 @@ captured_for() {
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]ewi-service#[fg=colour240]◀#[bg=colour240]#[fg=colour255] fix-loop #[bg=default]#[fg=colour1]#[norange]#[default]')" ]
+}
+
+@test "sets a short form that cuts long names and badges to 10 characters" {
+  set_sessions work
+  add_window work @1 1 100 api-gateway-service
+  add_window work @2 1 200 ewi-service
+  set_worktree @2 fix-the-retry-loop
+  add_window work @3 1 300 notes
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_short_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]api-gatew…#[norange] · #[range=user|@2]ewi-servi…#[fg=colour254]◀#[bg=colour254]#[fg=colour232] fix-the-r… #[bg=default]#[fg=colour1]#[norange] · #[range=user|@3]notes#[norange]#[default]')" ]
+  [ "$(captured_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]api-gateway-service#[norange] · #[range=user|@2]ewi-service#[fg=colour254]◀#[bg=colour254]#[fg=colour232] fix-the-retry-loop #[bg=default]#[fg=colour1]#[norange] · #[range=user|@3]notes#[norange]#[default]')" ]
+}
+
+@test "keeps a name of exactly 10 characters whole in the short form" {
+  set_sessions work
+  add_window work @1 1 100 abcdefghij
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_short_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]abcdefghij#[norange]#[default]')" ]
+}
+
+@test "leaves a long name with non-ASCII characters whole in the short form" {
+  set_sessions work
+  add_window work @1 1 100 übersetzungen-de
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(captured_short_for work)" = "$(printf '#[fg=colour1]🔔 #[range=user|@1]übersetzungen-de#[norange]#[default]')" ]
+}
+
+@test "clears the short form along with status-right when no window has a pending bell" {
+  set_sessions work
+  add_window work @1 0 "" shell
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  grep -q "^work	$" "$MOCK_DIR/captured_short"
 }

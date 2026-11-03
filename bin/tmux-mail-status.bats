@@ -9,13 +9,20 @@ setup() {
   mkdir -p "$MOCK_DIR/bin"
 
   # Mock tmux: show-option serves the current @mail from $MOCK_DIR/current,
-  # set-option records its value into $MOCK_DIR/set (absent if never called),
-  # refresh-client counts its calls.
+  # set-option records @mail's value into $MOCK_DIR/set and @mail_short's
+  # into $MOCK_DIR/set_short (absent if never called), refresh-client counts
+  # its calls.
   cat > "$MOCK_DIR/bin/tmux" <<'EOF'
 #!/bin/sh
 case "$1" in
   show-option) cat "$MOCK_DIR/current" 2>/dev/null || true ;;
-  set-option) printf '%s' "$4" > "$MOCK_DIR/set" ;;
+  set-option)
+    if [ "$3" = @mail_short ]; then
+      printf '%s' "$4" > "$MOCK_DIR/set_short"
+    else
+      printf '%s' "$4" > "$MOCK_DIR/set"
+    fi
+    ;;
   refresh-client) echo x >> "$MOCK_DIR/refreshes" ;;
 esac
 EOF
@@ -36,6 +43,13 @@ message() { # message <sender> <status-or-empty>
   [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 agent (2) · daemon (1)#[norange]" ]
 }
 
+@test "sets a short form with just the unread total" {
+  { message agent ''; message daemon ''; message agent ''; message agent RO; } > "$MAIL"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$MOCK_DIR/set_short")" = "#[range=user|mail]📧 3#[norange]" ]
+}
+
 @test "does not count read messages" {
   { message agent RO; message daemon ''; } > "$MAIL"
   run "$SCRIPT"
@@ -48,6 +62,8 @@ message() { # message <sender> <status-or-empty>
   run "$SCRIPT"
   [ -f "$MOCK_DIR/set" ]
   [ -z "$(cat "$MOCK_DIR/set")" ]
+  [ -f "$MOCK_DIR/set_short" ]
+  [ -z "$(cat "$MOCK_DIR/set_short")" ]
 }
 
 @test "leaves tmux alone when the value has not changed" {
@@ -56,6 +72,7 @@ message() { # message <sender> <status-or-empty>
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -f "$MOCK_DIR/set" ]
+  [ ! -f "$MOCK_DIR/set_short" ]
   [ ! -f "$MOCK_DIR/refreshes" ]
 }
 
@@ -69,6 +86,7 @@ message() { # message <sender> <status-or-empty>
   message 'a#b' '' > "$MAIL"
   run "$SCRIPT"
   [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 a##b (1)#[norange]" ]
+  [ "$(cat "$MOCK_DIR/set_short")" = "#[range=user|mail]📧 1#[norange]" ]
 }
 
 @test "shows nothing when there is no mailbox" {

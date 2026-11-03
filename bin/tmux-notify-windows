@@ -21,7 +21,8 @@
 # client sees the windows in the session it's attached to. Driven by the
 # alert-bell hook (a new bell) and the window-select / -change / -unlink hooks
 # (a bell clears when you visit its window, or the window closes), plus once at
-# startup — see tmux.conf. status-right is otherwise unused.
+# startup — see tmux.conf. status-right is otherwise unused; tmux.conf draws it
+# (or @bells_short, its short form below) as the footer's bottom row.
 set -eu
 
 now=$(date +%s)
@@ -47,30 +48,57 @@ badge_fg=$(tmux show-option -gqv @badge_fg 2>/dev/null) || badge_fg=''
 badge_bg=${badge_bg:-colour254}
 badge_fg=${badge_fg:-colour232}
 
-tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r sess; do
-  # This session's windows with a pending bell, oldest ring first (ascending
-  # @bell_at), ' · '-joined. Tab-separated so a window name containing spaces
-  # stays intact when we cut it back out below. Each entry (the name plus its
-  # worktree badge, if it has one) is wrapped in a range=user marked with its
-  # window id (e.g. "@12") so a click on either selects that window — see the
-  # MouseDown1Status binding in tmux.conf. The badge ends by restoring the red
-  # the entries share with an explicit bg/fg rather than #[default], which
-  # would otherwise end the red for the rest of the list.
-  names=$(tmux list-windows -t "$sess" -F '#{window_bell_flag}	#{@bell_at}	#{window_id}	#{window_name}	#{@worktree_name}' 2>/dev/null |
+# shorten <text> <max>: <text> cut to <max> characters with a trailing …, or
+# unchanged when it already fits or <max> is 0. Only plain-ASCII text is cut --
+# `cut -c` counts bytes rather than characters outside a UTF-8 locale, and
+# half a multibyte character renders as garbage, so a name with any other
+# character is left whole. The check runs under LC_ALL=C, where a range means
+# byte values; in another locale [ -~] can match accented letters too.
+shorten() {
+  if [ "$2" -eq 0 ] || [ "${#1}" -le "$2" ] ||
+    printf '%s' "$1" | LC_ALL=C grep -q '[^ -~]'; then
+    printf '%s' "$1"
+    return
+  fi
+  printf '%s…' "$(printf '%s' "$1" | cut -c1-"$(( $2 - 1 ))")"
+}
+
+# entries <session> <max>: that session's windows with a pending bell, oldest
+# ring first (ascending @bell_at), ' · '-joined, each name and badge shortened
+# to <max> characters (0 = in full). Tab-separated so a window name containing
+# spaces stays intact when we cut it back out below. Each entry (the name plus
+# its worktree badge, if it has one) is wrapped in a range=user marked with its
+# window id (e.g. "@12") so a click on either selects that window — see the
+# MouseDown1Status binding in tmux.conf. The badge ends by restoring the red
+# the entries share with an explicit bg/fg rather than #[default], which would
+# otherwise end the red for the rest of the list.
+entries() {
+  list=$(tmux list-windows -t "$1" -F '#{window_bell_flag}	#{@bell_at}	#{window_id}	#{window_name}	#{@worktree_name}' 2>/dev/null |
     awk -F'	' '$1 == 1' | sort -t'	' -k2,2n | cut -f3- |
     while IFS='	' read -r wid name worktree; do
-      printf '#[range=user|%s]%s' "$wid" "$name"
+      printf '#[range=user|%s]%s' "$wid" "$(shorten "$name" "$2")"
       if [ -n "$worktree" ]; then
-        printf '#[fg=%s]◀#[bg=%s]#[fg=%s] %s #[bg=default]#[fg=colour1]' "$badge_bg" "$badge_bg" "$badge_fg" "$worktree"
+        printf '#[fg=%s]◀#[bg=%s]#[fg=%s] %s #[bg=default]#[fg=colour1]' "$badge_bg" "$badge_bg" "$badge_fg" "$(shorten "$worktree" "$2")"
       fi
       printf '#[norange] · '
     done)
-  names=${names% · }
+  printf '%s' "${list% · }"
+}
+
+# Two forms per session: status-right in full, and @bells_short with every name
+# and badge cut to 10 characters, which the bottom status row shows instead on
+# a client narrower than @footer_narrow (see tmux.conf). Narrow, the list gets
+# the whole row, so it still runs to several entries before it's clipped -- at
+# the right, so it's the newest rings that drop off, never the oldest.
+tmux list-sessions -F '#{session_name}' 2>/dev/null | while IFS= read -r sess; do
+  names=$(entries "$sess" 0)
 
   if [ -n "$names" ]; then
     tmux set-option -t "$sess" status-right "#[fg=colour1]🔔 $names#[default]"
+    tmux set-option -t "$sess" @bells_short "#[fg=colour1]🔔 $(entries "$sess" 10)#[default]"
   else
     tmux set-option -t "$sess" status-right ''
+    tmux set-option -t "$sess" @bells_short ''
   fi
 done
 

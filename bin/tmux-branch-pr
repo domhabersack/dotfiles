@@ -1,16 +1,17 @@
 #!/bin/sh
 # Renders the active window's branch pull-request status into that window's
-# @branch_pr option, shown on its own status row (status-format[2]) that only
-# exists while there IS a PR for the branch:
+# @branch_pr option, shown on its own status row, just above the bell list,
+# that only exists while there IS a PR for the branch:
 #   PR #42 · 3 files · +120 -30 · checks ✓ · approved · 2 unresolved
 # Empty (no row) when the active window isn't in a repo, its branch has no open
-# PR, or the data isn't readable. The window name and branch render on the row
-# ABOVE this (status-format[1], from window_name + @git_branch), so this stays
-# PR-status-only and never repeats them.
+# PR, or the data isn't readable. The window name and branch render in the
+# footer's top row (from window_name + @git_branch), so this stays
+# PR-status-only and never repeats them. @branch_pr_short is the same in fewer
+# columns, for a narrow client.
 #
 # This is BRANCH-scoped "open work" visibility — the state of the PR the window
 # in front of you is producing — and is a separate axis from bin/tmux-repo-pr,
-# which shows REPO-wide open-PR/vulnerability health on the row below. Both can
+# which shows REPO-wide open-PR/vulnerability health on the row above. Both can
 # show at once (see bin/tmux-status-rows for how the bar sizes itself), one, or
 # neither.
 #
@@ -117,6 +118,7 @@ while read -r attached active wid path; do
   fi
 
   rendered=''
+  short=''
   if [ "$status" = ok ] && [ "$has" = true ]; then
     # Diff size: files changed, then colored +added / -deleted. "#" escaped as
     # "##" so the E: re-expansion in status-format (see tmux.conf) yields a
@@ -203,8 +205,62 @@ while read -r attached active wid path; do
     fi
 
     rendered=$parts
+
+    # The short form, for a client narrower than @footer_narrow (see
+    # tmux.conf): the same number and diff, then each segment cut to a symbol
+    # or a word -- no commit or file counts, which can wait for a wider screen.
+    short="#[range=user|branch_pr]PR ##$number"
+    [ "$draft" = true ] && short="$short #[fg=colour244](draft)#[default]"
+    short="$short#[norange] · $diff"
+    if [ "$checks_state" = '-' ] || [ "$checks_total" -eq 0 ]; then
+      checks_short="#[fg=colour244]no checks#[default]"
+    else
+      case "$checks_state" in
+        SUCCESS)
+          if [ "$checks_skipped" -ge "$checks_total" ]; then
+            checks_short="#[fg=colour244]skipped#[default]"
+          elif [ "$checks_skipped" -gt 0 ]; then
+            checks_short="#[fg=colour2]✓#[default] #[fg=colour244]($checks_skipped skipped)#[default]"
+          else
+            checks_short="#[fg=colour2]✓#[default]"
+          fi
+          ;;
+        FAILURE|ERROR)
+          if [ "$checks_failed" -gt 0 ]; then
+            checks_short="#[fg=colour1]✗ $checks_failed#[default]"
+          else
+            checks_short="#[fg=colour1]✗#[default]"
+          fi
+          if [ "$checks_pending" -gt 0 ]; then
+            checks_short="$checks_short #[fg=colour3]· $checks_pending pending#[default]"
+          fi
+          ;;
+        PENDING|EXPECTED)
+          if [ "$checks_pending" -gt 0 ]; then
+            checks_short="#[fg=colour3]$checks_pending pending#[default]"
+          else
+            checks_short="#[fg=colour3]pending#[default]"
+          fi
+          ;;
+        *)                checks_short="#[fg=colour244]no checks#[default]" ;;
+      esac
+    fi
+    short="$short · $checks_short"
+    if [ "$draft" != true ]; then
+      case "$review" in
+        APPROVED)          short="$short · #[fg=colour2]approved#[default]" ;;
+        CHANGES_REQUESTED) short="$short · #[fg=colour1]changes req.#[default]" ;;
+        *)                 : ;;
+      esac
+    fi
+    if [ "$unresolved" -gt 0 ]; then
+      short="$short · #[fg=colour3]$unresolved unres.#[default]"
+    fi
   fi
 
+  # The short form first, and only here: every other path clears @branch_pr,
+  # which takes the whole row away, so a leftover short form is never drawn.
+  tmux set-window-option -t "$wid" @branch_pr_short "$short"
   tmux set-window-option -t "$wid" @branch_pr "$rendered"
 
   age=$(( now - fetched_at ))
