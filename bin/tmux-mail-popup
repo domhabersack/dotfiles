@@ -1,0 +1,138 @@
+#!/bin/sh
+# Interactive tmux popup bound to `prefix + m` and to a click on the 📧 entry
+# (see tmux.conf): an fzf list of every message in the local mailbox, newest
+# first, unread ones bold with a ●, the highlighted message’s text in the
+# preview pane. Backed by bin/tmux-mail-feed, with changes made through
+# bin/tmux-mail-action. Falls back to plain `mail` when fzf isn’t available, so
+# the popup degrades instead of breaking -- the lookup happens here, at runtime
+# inside the popup’s own (non-interactive, non-login) shell, rather than in
+# tmux.conf, because that shell’s PATH is not the interactive PATH fzf normally
+# lives on (see bin/tmux-obsidian-task-picker, which does the same).
+#
+# Keys: space/enter mark the highlighted message read, or unread again; ctrl-d
+# deletes it; ctrl-r forces a refresh; esc closes the popup. Reading a message
+# in the preview never marks it read: whether it counts as read is up to you.
+#
+# Refresh: fzf’s every(5) runs `--poll`, which reloads the list only if the
+# mailbox actually changed, so a message that arrives while the popup is open
+# shows up on its own -- see bin/tmux-obsidian-task-poll for why the gate
+# matters. After every change the footer indicator is re-rendered at once
+# (bin/tmux-mail-status) instead of waiting for its next tick.
+#
+# The other modes are this script calling itself from fzf’s bindings:
+#   --list         the list, in fzf’s input format
+#   --poll         an fzf action: reload if the mailbox changed, else ignore
+#   --act ACT LINE an fzf action: apply ACT (toggle|delete) to the message on
+#                  LINE (as fzf has it) and then reload
+set -eu
+
+bindir=$(cd "$(dirname "$0")" && pwd)
+self="$bindir/tmux-mail-popup"
+feed="$bindir/tmux-mail-feed"
+action="$bindir/tmux-mail-action"
+status="$bindir/tmux-mail-status"
+
+mbox=${MAIL:-/var/mail/$(id -un)}
+us=$(printf '\037')
+
+# Every line fzf has is the message’s display text, then the feed line it came
+# from: fzf shows only the first field, and hands the lot back to the bindings
+# below, so they can name the message exactly as the feed gave it. Newest first.
+list() {
+  "$feed" | sort -rn | awk -F "$us" -v us="$us" '
+    BEGIN { esc = sprintf("%c", 27) }
+    {
+      isUnread = ($2 == "U")
+      style = isUnread ? esc "[1m" : esc "[2m"
+      marker = isUnread ? "●" : " "
+      printf "%s%s %-12.12s %-12s %s%s%s%s\n", style, marker, $3, $4, $5, esc "[0m", us, $0
+    }
+  '
+}
+
+case "${1:-}" in
+  --list)
+    list
+    exit 0
+    ;;
+
+  --poll)
+    stampfile=${TMUX_MAIL_POLL_STAMP:-/tmp/tmux-mail-poll.stamp}
+
+    # Never fight someone mid-keystroke.
+    if [ "${FZF_IDLE_TIME_MS:-9999}" -lt 400 ]; then
+      echo ignore
+      exit 0
+    fi
+
+    # cksum, not stat: mtime is one-second granularity, and flipping a
+    # message’s read state can leave the size as it was.
+    stamp=$(cksum "$mbox" 2>/dev/null) || stamp=''
+    prev=$(cat "$stampfile" 2>/dev/null) || prev=''
+
+    if [ "$stamp" = "$prev" ]; then
+      echo ignore
+      exit 0
+    fi
+
+    printf '%s\n' "$stamp" > "$stampfile"
+    echo "reload-sync($self --list)"
+    exit 0
+    ;;
+
+  --act)
+    stampfile=${TMUX_MAIL_POLL_STAMP:-/tmp/tmux-mail-poll.stamp}
+    line=${3#*"$us"}
+
+    # The reload below shows the result either way; a refusal also rings the
+    # bell so the "nothing happened" case isn’t silent.
+    if "$action" "$2" "$line"; then
+      reply="reload-sync($self --list)"
+    else
+      reply="bell+reload-sync($self --list)"
+    fi
+
+    # Our own change must not read as a mailbox change to the next poll, or the
+    # list would reload twice.
+    cksum "$mbox" > "$stampfile" 2>/dev/null || true
+    "$status" || true
+    echo "$reply"
+    exit 0
+    ;;
+esac
+
+fzf=""
+if command -v fzf >/dev/null 2>&1; then
+  fzf=$(command -v fzf)
+elif [ -x "$HOME/.fzf/bin/fzf" ]; then
+  fzf="$HOME/.fzf/bin/fzf"
+fi
+
+if [ -z "$fzf" ]; then
+  mail -f "$mbox" || { echo 'No mail'; sleep 2; }
+  exit 0
+fi
+
+# Per-invocation state, so two popups open at once never share a stamp. Cleaned
+# up on exit -- the trap must run after fzf exits, so this script must not exec
+# fzf.
+stampfile=$(mktemp "${TMPDIR:-/tmp}/tmux-mail-poll.XXXXXX")
+trap 'rm -f "$stampfile"' EXIT
+export TMUX_MAIL_POLL_STAMP="$stampfile"
+cksum "$mbox" > "$stampfile" 2>/dev/null || true
+
+# --id-nth is the sender, date and subject, not the position: a delete shifts
+# every later message’s position, and the cursor has to stay on the same message.
+list | "$fzf" \
+  --ansi --delimiter="$us" --with-nth=1 --no-sort \
+  --track --id-nth=4,5,6 \
+  --layout=reverse --header-first --highlight-line --cycle \
+  --prompt='mail> ' --info=inline-right \
+  --header='space/enter toggle read · ctrl-d delete · ctrl-r refresh · esc close' \
+  --preview="$feed --body {2}" --preview-window='right,55%,wrap' \
+  --bind="space:transform:$self --act toggle {}" \
+  --bind="enter:transform:$self --act toggle {}" \
+  --bind="ctrl-d:transform:$self --act delete {}" \
+  --bind="ctrl-r:reload-sync($self --list)" \
+  --bind="every(5):bg-transform:$self --poll" \
+  --bind='esc:abort' || true

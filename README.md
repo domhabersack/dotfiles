@@ -77,6 +77,38 @@ arrives (the `alert-bell` hook, not just the status-interval tick), and clears
 a window from the list as soon as you visit it — the same `window_bell_flag`
 signal behind the 🔔 in the window list above.
 
+**Local mail** shows up next to it. Anything that delivers to this machine’s
+mailbox (`/var/mail/<you>`, or `$MAIL`) is surfaced on the right of the top
+status row, after the 🔔 list, as the unread count per sender:
+`📧 agent (2) · daemon (1)`. It is empty, and so absent, when nothing is
+unread. The idea is that another profile on the same machine, such as an agent
+profile running Claude Code in a loop, can tell you it is stuck with a plain
+`mail`, instead of you having to remember to look at its tmux. Sending is up to
+whatever does the sending; this repo only receives, so a quick test is:
+
+```sh
+echo "I need an API key" | mail -s "agent is stuck" "$USER"
+```
+
+`bin/tmux-mail-watch` re-reads the mailbox every 5 seconds and
+`bin/tmux-mail-status` keeps the indicator current. `<prefix> m`, or a click on
+the 📧 entry, opens a popup (`bin/tmux-mail-popup`): an fzf list of every
+message, newest first, unread ones bold with a ●, and the highlighted message’s
+text in the preview. Looking at a message does not mark it read. Instead:
+
+| Key             | Action                                 |
+| --------------- | -------------------------------------- |
+| `space`/`enter` | mark the message read, or unread again |
+| `ctrl-d`        | delete the message                     |
+| `ctrl-r`        | refresh the list                       |
+| `esc`           | close the popup                        |
+
+The list refreshes on its own while the popup is open, and the indicator
+updates as soon as you change a message. Changes are made through `mail`
+itself (`bin/tmux-mail-action`), so they take the mailbox lock postfix
+delivers under, and a change is refused (with a bell) if the message it was
+aimed at has since moved or gone.
+
 Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf`) can show
 your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each
 session row via `bin/tmux-usage-statusline`. That script only reads

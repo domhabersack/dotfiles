@@ -48,6 +48,7 @@ prefix	Escape	Enter copy-mode
 prefix	p	Paste buffer
 prefix	w	Window list (choose-tree)
 prefix	P	Toggle a "come back later" 📌 on this window, shown in the window list
+prefix	m	Local mail popup (read, mark read/unread, delete)
 prefix	T	Obsidian daily-notes task picker popup
 prefix	W	Worktree picker popup (switch between git worktrees for this repo)
 copy-mode-vi	v	Begin a selection (while in copy-mode)

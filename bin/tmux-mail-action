@@ -1,0 +1,63 @@
+#!/bin/sh
+# Changes one message in the local mailbox for the mail popup
+# (bin/tmux-mail-popup):
+#
+#   tmux-mail-action toggle <line>   mark an unread message read, or a read one
+#                                    unread
+#   tmux-mail-action delete <line>   delete the message
+#
+# <line> is the message’s line from bin/tmux-mail-feed exactly as the popup
+# showed it. Messages are addressed by position in the mailbox, and a delete (or
+# a delivery that lands between the popup’s last refresh and the keypress)
+# shifts the positions, so the line is checked against what is at that position
+# now and the change is refused, exit 1, when it no longer matches: better a
+# bell than a different message deleted. The popup then reloads and shows the
+# mailbox as it is.
+#
+# The change itself is made by mail, not by editing the file: mail takes the
+# same lock the delivery agent writes under, so a message arriving mid-change
+# isn’t lost. In mail’s own terms, a message counts as read once it has been
+# typed, which is the only way to set that (the Status: header gets an R), and
+# `unread` clears it again. Whatever mail does not delete stays where it is in
+# the mailbox rather than moving to ~/mbox, since this opens the mailbox as a
+# file (-f) instead of as the system mailbox.
+set -eu
+
+action=${1:?usage: tmux-mail-action toggle|delete <line>}
+line=${2:?usage: tmux-mail-action toggle|delete <line>}
+
+feed="$(dirname "$0")/tmux-mail-feed"
+mbox=${MAIL:-/var/mail/$(id -un)}
+us=$(printf '\037')
+
+# The line’s own fields: only the position and the read state are needed here,
+# the rest is just there to be compared.
+IFS=$us read -r index state _ <<EOF
+$line
+EOF
+
+current=$("$feed" | awk -F "$us" -v n="$index" '$1 == n')
+isStale=true
+[ "$current" = "$line" ] && isStale=false
+
+if [ "$isStale" = true ]; then
+  exit 1
+fi
+
+case $action in
+  toggle)
+    if [ "$state" = U ]; then
+      command="type $index"
+    else
+      command="unread $index"
+    fi
+    ;;
+  delete) command="delete $index" ;;
+  *)
+    echo "tmux-mail-action: unknown action: $action" >&2
+    exit 2
+    ;;
+esac
+
+# type prints the message; it is only being used for what it records.
+printf '%s\nquit\n' "$command" | mail -N -n -f "$mbox" >/dev/null 2>&1
