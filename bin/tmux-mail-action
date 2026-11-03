@@ -11,16 +11,19 @@
 # a delivery that lands between the popup’s last refresh and the keypress)
 # shifts the positions, so the line is checked against what is at that position
 # now and the change is refused, exit 1, when it no longer matches: better a
-# bell than a different message deleted. The popup then reloads and shows the
+# "nothing done" than a different message deleted. The popup then reloads and shows the
 # mailbox as it is.
 #
-# The change itself is made by mail, not by editing the file: mail takes the
-# same lock the delivery agent writes under, so a message arriving mid-change
-# isn’t lost. In mail’s own terms, a message counts as read once it has been
-# typed, which is the only way to set that (the Status: header gets an R), and
-# `unread` clears it again. Whatever mail does not delete stays where it is in
-# the mailbox rather than moving to ~/mbox, since this opens the mailbox as a
-# file (-f) instead of as the system mailbox.
+# The change itself is made by mail, not by editing the file, and with the
+# mailbox opened as the system mailbox ($MAIL), not as a file (-f): only then
+# does mail take the flock the delivery agent writes under (postfix here locks
+# with flock and a dotlock) when it rewrites the mailbox on quit. With -f it
+# takes neither and truncates and rewrites the file regardless, so a message
+# delivered during that rewrite is cut off. In mail’s own terms, a message
+# counts as read once it has been typed, which is the only way to set that (the
+# Status: header gets an R), and `unread` clears it again. `set hold` keeps
+# what mail does not delete where it is in the mailbox rather than moving read
+# messages to ~/mbox, which is what quitting the system mailbox does otherwise.
 set -eu
 
 action=${1:?usage: tmux-mail-action toggle|delete <line>}
@@ -60,4 +63,4 @@ case $action in
 esac
 
 # type prints the message; it is only being used for what it records.
-printf '%s\nquit\n' "$command" | mail -N -n -f "$mbox" >/dev/null 2>&1
+printf 'set hold\n%s\nquit\n' "$command" | MAIL="$mbox" mail -N -n >/dev/null 2>&1

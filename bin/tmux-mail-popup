@@ -109,7 +109,14 @@ elif [ -x "$HOME/.fzf/bin/fzf" ]; then
 fi
 
 if [ -z "$fzf" ]; then
-  mail -f "$mbox" || { echo 'No mail'; sleep 2; }
+  # As the system mailbox with hold set, for the same reason as
+  # bin/tmux-mail-action: the lock, and nothing moved to ~/mbox. MAILRC
+  # replaces ~/.mailrc, so that is sourced first.
+  rc=$(mktemp "${TMPDIR:-/tmp}/tmux-mail-rc.XXXXXX")
+  [ -f "$HOME/.mailrc" ] && printf 'source %s\n' "$HOME/.mailrc" > "$rc"
+  printf 'set hold\n' >> "$rc"
+  MAILRC=$rc MAIL=$mbox mail || { echo 'No mail'; sleep 2; }
+  rm -f "$rc"
   exit 0
 fi
 
