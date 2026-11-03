@@ -1,0 +1,53 @@
+#!/bin/sh
+# Sets the global option @mail to the footer’s mail indicator -- unread
+# messages counted per sender, "📧 agent (2) · daemon (1)", senders in the
+# order their first unread message arrived -- or to nothing when there is no
+# unread mail. status-format[1] in tmux.conf draws it on the right of the top
+# row, after the 🔔 list; a click on it opens the mail popup (the range tag is
+# "mail", see the MouseDown1Status binding).
+#
+# Global rather than per-session, unlike the bell list in status-right: the
+# mailbox belongs to the user, not to any one tmux session, so every client
+# should show the same thing.
+#
+# Run by bin/tmux-mail-watch on a short ticker, and directly by the popup
+# (bin/tmux-mail-popup) after it changes a message, so the footer follows a
+# toggle or delete without waiting for the next tick. The option is only
+# rewritten, and the bar only repainted, when its value actually changed.
+set -eu
+
+feed="$(dirname "$0")/tmux-mail-feed"
+us=$(printf '\037')
+
+summary=$("$feed" | awk -F "$us" '
+  $2 == "U" {
+    if (!($3 in count)) order[++senders] = $3
+    count[$3]++
+  }
+  END {
+    for (i = 1; i <= senders; i++) {
+      printf "%s%s (%d)", (i > 1 ? " · " : ""), order[i], count[order[i]]
+    }
+  }
+')
+
+value=''
+if [ -n "$summary" ]; then
+  # # starts a tmux style sequence, so a literal one in a sender name is doubled.
+  summary=$(printf '%s' "$summary" | sed 's/#/##/g')
+  value="#[range=user|mail]📧 $summary#[norange]"
+fi
+
+current=$(tmux show-option -gqv @mail 2>/dev/null) || current=''
+isUnchanged=false
+[ "$value" = "$current" ] && isUnchanged=true
+
+if [ "$isUnchanged" = true ]; then
+  exit 0
+fi
+
+tmux set-option -g @mail "$value"
+
+# `|| true` so a run with no client attached (nothing to repaint) doesn't fail
+# the script under `set -e`.
+tmux refresh-client -S 2>/dev/null || true
