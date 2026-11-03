@@ -1,5 +1,5 @@
 #!/bin/sh
-# Prints three lines for the directory given as $1 (default: the current
+# Prints two lines for the directory given as $1 (default: the current
 # directory), one per window option bin/tmux-worktree-status-windows stamps:
 #
 #   line 1 (@worktree_here)    "⎇ " (with a trailing space, so it never
@@ -7,19 +7,12 @@
 #                              when $1 sits inside a LINKED worktree of its
 #                              repo, empty otherwise (including when $1
 #                              isn’t a repo at all, or sits in the main one).
-#   line 2 (@worktree_pending) "⎇ N" when $1 sits inside the MAIN worktree
-#                              and N other worktrees of that repo still exist
-#                              (created by `git-worktree-new`, not yet
-#                              cleaned up with `git worktree remove`), empty
-#                              otherwise.
-#   line 3 (@worktree_name)    the linked worktree’s directory name (the
+#   line 2 (@worktree_name)    the linked worktree’s directory name (the
 #                              basename of its toplevel, so it stays right
 #                              from a subdirectory), empty whenever line 1 is.
 #
-# A window is either "in a linked worktree" or "in the main worktree with
-# outstanding ones to clean up" or neither -- never both -- so the first two lines
-# are mutually exclusive in practice, but all three are always printed (empty or
-# not) so a caller can reliably read them positionally.
+# Both lines are always printed (empty or not) so a caller can reliably read
+# them positionally.
 #
 # The "here" signal resolves the main root via bin/git-worktree-root, not
 # from `git worktree list --porcelain`’s first record -- that record is the
@@ -28,33 +21,27 @@
 # worktree as "linked" (⎇) here. If git-worktree-root can’t resolve one at
 # all (a bare repo with no working tree of its own), $dir is treated as "not
 # the main worktree" by omission below, which is the only thing it CAN be in
-# that case if it resolves a toplevel at all. The "pending" count doesn’t
-# have the same problem -- it only counts how many worktree records exist,
-# not which path the main one reports -- so it’s read straight from the
-# list; it counts every OTHER record, valid or `prunable` (directory deleted
-# but not yet removed) alike, since a prunable entry is exactly "not cleaned
-# up yet", the case this signal exists to surface.
+# that case if it resolves a toplevel at all.
 set -eu
 
 dir=${1:-.}
 
-git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { printf '\n\n\n'; exit 0; }
+git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || { printf '\n\n'; exit 0; }
 
 main_root=$("$(dirname "$0")/git-worktree-root" "$dir" 2>/dev/null) || main_root=""
-other_count=$(git -C "$dir" worktree list --porcelain | awk '/^worktree /{n++} END{print n-1}')
 
 toplevel=$(git -C "$dir" rev-parse --path-format=absolute --show-toplevel 2>/dev/null) || toplevel=""
 
 here=""
-pending=""
 name=""
 if [ -n "$toplevel" ]; then
-  if [ -n "$main_root" ] && [ "$toplevel" = "$main_root" ]; then
-    [ "$other_count" -gt 0 ] && pending="⎇ $other_count"
-  else
+  isMainWorktree=false
+  [ -n "$main_root" ] && [ "$toplevel" = "$main_root" ] && isMainWorktree=true
+
+  if [ "$isMainWorktree" = false ]; then
     here="⎇ "
     name=$(basename "$toplevel")
   fi
 fi
 
-printf '%s\n%s\n%s\n' "$here" "$pending" "$name"
+printf '%s\n%s\n' "$here" "$name"
