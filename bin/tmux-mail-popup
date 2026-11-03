@@ -84,12 +84,12 @@ case "${1:-}" in
     stampfile=${TMUX_MAIL_POLL_STAMP:-/tmp/tmux-mail-poll.stamp}
     line=${3#*"$us"}
 
-    # The reload below shows the result either way; a refusal also rings the
-    # bell so the "nothing happened" case isn’t silent.
-    if "$action" "$2" "$line"; then
-      reply="reload-sync($self --list)"
-    else
-      reply="bell+reload-sync($self --list)"
+    # The reload below shows the result either way; a refusal also says so on
+    # the status line, so the "nothing happened" case isn’t silent. Not with
+    # fzf's bell: a BEL from inside a display-popup never reaches the terminal.
+    reply="reload-sync($self --list)"
+    if ! "$action" "$2" "$line"; then
+      tmux display-message -d 3000 'Mailbox changed; nothing done' 2>/dev/null || true
     fi
 
     # Our own change must not read as a mailbox change to the next poll, or the

@@ -12,13 +12,17 @@ setup() {
   export MOCK_DIR="$BATS_TEST_TMPDIR/mock"
   mkdir -p "$MOCK_DIR/bin"
 
-  # Mock mail and tmux: mail records that it was called; tmux does nothing,
-  # standing in for the status refresh the --act mode runs afterwards.
+  # Mock mail and tmux: mail records that it was called; tmux records its
+  # arguments, standing in for the status refresh the --act mode runs
+  # afterwards and the message it shows on a refusal.
   cat > "$MOCK_DIR/bin/mail" <<'EOF'
 #!/bin/sh
 cat > "$MOCK_DIR/mail-stdin"
 EOF
-  printf '#!/bin/sh\nexit 0\n' > "$MOCK_DIR/bin/tmux"
+  cat > "$MOCK_DIR/bin/tmux" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$MOCK_DIR/tmux-calls"
+EOF
   chmod +x "$MOCK_DIR/bin/mail" "$MOCK_DIR/bin/tmux"
   export PATH="$MOCK_DIR/bin:$PATH"
 
@@ -81,10 +85,18 @@ plain() { sed "s/$ESC\[[0-9;]*m//g"; }
   [ "$output" = ignore ]
 }
 
-@test "--act rings the bell and changes nothing for a message that is no longer there" {
+@test "--act says so and changes nothing for a message that is no longer there" {
   line="x${US}9${US}U${US}nobody${US}Jan 1 00:00${US}gone"
   run "$SCRIPT" --act delete "$line"
   [ "$status" -eq 0 ]
-  [[ "$output" == bell+reload-sync* ]]
+  [[ "$output" == reload-sync* ]]
   [ ! -f "$MOCK_DIR/mail-stdin" ]
+  grep -q '^display-message .*nothing done' "$MOCK_DIR/tmux-calls"
+}
+
+@test "--act shows no message when the change goes through" {
+  line="x${US}$("$FEED" | sed -n 1p)"
+  run "$SCRIPT" --act toggle "$line"
+  [ "$status" -eq 0 ]
+  if grep -q '^display-message' "$MOCK_DIR/tmux-calls" 2>/dev/null; then false; fi
 }

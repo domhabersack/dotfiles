@@ -105,9 +105,9 @@ text in the preview. Looking at a message does not mark it read. Instead:
 
 The list refreshes on its own while the popup is open, and the indicator
 updates as soon as you change a message. Changes are made through `mail`
-itself (`bin/tmux-mail-action`), so they take the mailbox lock postfix
-delivers under, and a change is refused (with a bell) if the message it was
-aimed at has since moved or gone.
+itself (`bin/tmux-mail-action`), opened as the system mailbox so they take the
+lock postfix delivers under, and a change is refused (with a "nothing done" on
+the status line) if the message it was aimed at has since moved or gone.
 
 Similarly, `<prefix> w` (`choose-tree`, wired up in `tmux.conf`) can show
 your account-wide Claude Code quota (5-hour and weekly, as in `/usage`) on each
