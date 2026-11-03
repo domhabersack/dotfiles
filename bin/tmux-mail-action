@@ -11,8 +11,8 @@
 # a delivery that lands between the popup’s last refresh and the keypress)
 # shifts the positions, so the line is checked against what is at that position
 # now and the change is refused, exit 1, when it no longer matches: better a
-# "nothing done" than a different message deleted. The popup then reloads and shows the
-# mailbox as it is.
+# "nothing done" than a different message deleted. The popup then reloads and
+# shows the mailbox as it is.
 #
 # The change itself is made by mail, not by editing the file, and with the
 # mailbox opened as the system mailbox ($MAIL), not as a file (-f): only then
