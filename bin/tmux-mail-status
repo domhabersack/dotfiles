@@ -61,15 +61,16 @@ if [ -n "$summary" ]; then
 fi
 
 current=$(tmux show-option -gqv @mail 2>/dev/null) || current=''
+currentShort=$(tmux show-option -gqv @mail_short 2>/dev/null) || currentShort=''
 isUnchanged=false
-[ "$value" = "$current" ] && isUnchanged=true
+[ "$value" = "$current" ] && [ "$short" = "$currentShort" ] && isUnchanged=true
 
 if [ "$isUnchanged" = true ]; then
   exit 0
 fi
 
-# The short form first: it follows from the same count, so it can only be
-# stale when @mail is too, and @mail is what the check above compares.
+# The short form first, so a client that sees the new @mail also has the
+# short form to go with it.
 tmux set-option -g @mail_short "$short"
 tmux set-option -g @mail "$value"
 

@@ -324,14 +324,16 @@ Termius on a phone, say), every row switches to a short form, so nothing that
 matters is cut off at the edge:
 
 ```
-─ dotfiles feat/foo ─ 📧 1 ───────────────
+─ dotfiles ─ 📧 1 ─ feat/foo ─────────────
 3 PRs · 5 vulns (2 crit, 1 high, 2 med)
 PR #42 · +120 -30 · ✓ · approved · 2 unres.
 🔔 codeshots · api
 ```
 
-The name, worktree badge and branch are cut to fit, and each bell entry to 10
-characters. The scripts set each short form (`@mail_short`, `@repo_pr_short`,
+The name and worktree badge are cut to 14 characters, the branch to its last
+16, and each bell entry to 10, each with a `…` added when cut. Mail sits before
+the branch, so on a screen just too wide for the short forms it's the branch
+that runs off the end, not the mail. The scripts set each short form (`@mail_short`, `@repo_pr_short`,
 `@branch_pr_short`, `@bells_short`) alongside the full one. The test runs per
 client, so a phone and a wide screen attached at the same time each get their
 own. The mail popup takes the full width there too, with its preview below the

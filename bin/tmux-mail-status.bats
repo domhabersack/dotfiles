@@ -10,7 +10,8 @@ setup() {
   mkdir -p "$MOCK_DIR/bin"
 
   # Mock tmux: display-message serves a fixed server pid (for the stamp's
-  # name), show-option serves the current @mail from $MOCK_DIR/current,
+  # name), show-option serves the current @mail from $MOCK_DIR/current
+  # (@mail_short from $MOCK_DIR/current_short),
   # set-option records @mail's value into $MOCK_DIR/set and @mail_short's
   # into $MOCK_DIR/set_short (absent if never called), refresh-client counts
   # its calls.
@@ -18,7 +19,13 @@ setup() {
 #!/bin/sh
 case "$1" in
   display-message) echo 4242 ;;
-  show-option) cat "$MOCK_DIR/current" 2>/dev/null || true ;;
+  show-option)
+    if [ "$3" = @mail_short ]; then
+      cat "$MOCK_DIR/current_short" 2>/dev/null || true
+    else
+      cat "$MOCK_DIR/current" 2>/dev/null || true
+    fi
+    ;;
   set-option)
     if [ "$3" = @mail_short ]; then
       printf '%s' "$4" > "$MOCK_DIR/set_short"
@@ -72,6 +79,7 @@ message() { # message <sender> <status-or-empty>
 @test "leaves tmux alone when the value has not changed" {
   message agent '' > "$MAIL"
   printf '%s' "#[range=user|mail]📧 agent (1)#[norange]" > "$MOCK_DIR/current"
+  printf '%s' "#[range=user|mail]📧 1#[norange]" > "$MOCK_DIR/current_short"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -f "$MOCK_DIR/set" ]
@@ -131,4 +139,11 @@ message() { # message <sender> <status-or-empty>
   message agent '' > "$MAIL"
   "$SCRIPT"
   [ -f "$TMPDIR/tmux-mail-status.$(id -u).4242" ]
+}
+
+@test "sets a missing short form even when @mail is already current" {
+  message agent '' > "$MAIL"
+  printf '%s' "#[range=user|mail]📧 agent (1)#[norange]" > "$MOCK_DIR/current"
+  run "$SCRIPT" --force
+  [ "$(cat "$MOCK_DIR/set_short")" = "#[range=user|mail]📧 1#[norange]" ]
 }
