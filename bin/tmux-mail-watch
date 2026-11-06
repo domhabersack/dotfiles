@@ -1,17 +1,18 @@
 #!/bin/sh
-# Background ticker that re-runs bin/tmux-mail-status every few seconds, so mail
+# Background ticker that re-runs bin/tmux-mail-status once a minute, so mail
 # that lands while you sit in a window shows up in the footer without any tmux
-# event firing: nothing in tmux knows a message arrived. It re-reads the whole
-# mailbox each tick instead of watching it for changes, because that is cheap
-# for a mailbox this size and a missed change would otherwise stay missed until
-# the next one; bin/tmux-mail-status only touches tmux when the result differs.
+# event firing: nothing in tmux knows a message arrived. Polling rather than
+# watching the file, so a missed event can't leave the indicator stale; each
+# tick costs a size and time check (bin/tmux-mail-changed), and the mailbox is
+# only parsed when that finds a change. Once a minute matches the footer's
+# status-interval: this is a "someone wants you" signal, not a chat.
 # Single-instance guarded per tmux server, and exits with the server that
 # started it (see bin/tmux-watchlib): safe to call on every config reload.
 
 # shellcheck source=./tmux-watchlib
 . "$HOME/.dotfiles/bin/tmux-watchlib"
 
-INTERVAL=5
+INTERVAL=60
 
 # watch_alive as the loop condition, not `while :`, so this exits once the
 # tmux server that started it is gone rather than ticking forever.

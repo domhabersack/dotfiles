@@ -5,16 +5,19 @@ SCRIPT="$BATS_TEST_DIRNAME/tmux-mail-status"
 
 setup() {
   export MAIL="$BATS_TEST_TMPDIR/mbox"
+  export TMPDIR="$BATS_TEST_TMPDIR"
   export MOCK_DIR="$BATS_TEST_TMPDIR/mock"
   mkdir -p "$MOCK_DIR/bin"
 
-  # Mock tmux: show-option serves the current @mail from $MOCK_DIR/current,
+  # Mock tmux: display-message serves a fixed server pid (for the stamp's
+  # name), show-option serves the current @mail from $MOCK_DIR/current,
   # set-option records @mail's value into $MOCK_DIR/set and @mail_short's
   # into $MOCK_DIR/set_short (absent if never called), refresh-client counts
   # its calls.
   cat > "$MOCK_DIR/bin/tmux" <<'EOF'
 #!/bin/sh
 case "$1" in
+  display-message) echo 4242 ;;
   show-option) cat "$MOCK_DIR/current" 2>/dev/null || true ;;
   set-option)
     if [ "$3" = @mail_short ]; then
@@ -93,4 +96,39 @@ message() { # message <sender> <status-or-empty>
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -f "$MOCK_DIR/set" ]
+}
+
+@test "skips parsing a mailbox that has not changed since the last run" {
+  message agent '' > "$MAIL"
+  "$SCRIPT"
+  rm "$MOCK_DIR/set"
+  # @mail now differs from what a parse would set, so a set means it parsed.
+  printf '%s' 'stale' > "$MOCK_DIR/current"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ ! -f "$MOCK_DIR/set" ]
+}
+
+@test "parses again once the mailbox changes" {
+  message agent '' > "$MAIL"
+  "$SCRIPT"
+  printf '%s' "#[range=user|mail]📧 agent (1)#[norange]" > "$MOCK_DIR/current"
+  message daemon '' >> "$MAIL"
+  run "$SCRIPT"
+  [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 agent (1) · daemon (1)#[norange]" ]
+}
+
+@test "parses an unchanged mailbox anyway with --force" {
+  message agent '' > "$MAIL"
+  "$SCRIPT"
+  rm "$MOCK_DIR/set"
+  printf '%s' 'stale' > "$MOCK_DIR/current"
+  run "$SCRIPT" --force
+  [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 agent (1)#[norange]" ]
+}
+
+@test "keeps a separate stamp per tmux server" {
+  message agent '' > "$MAIL"
+  "$SCRIPT"
+  [ -f "$TMPDIR/tmux-mail-status.$(id -u).4242" ]
 }

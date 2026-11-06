@@ -31,6 +31,7 @@ self="$bindir/tmux-mail-popup"
 feed="$bindir/tmux-mail-feed"
 action="$bindir/tmux-mail-action"
 status="$bindir/tmux-mail-status"
+changed="$bindir/tmux-mail-changed"
 
 mbox=${MAIL:-/var/mail/$(id -un)}
 us=$(printf '\037')
@@ -65,17 +66,13 @@ case "${1:-}" in
       exit 0
     fi
 
-    # cksum, not stat: mtime is one-second granularity, and flipping a
-    # message’s read state can leave the size as it was.
-    stamp=$(cksum "$mbox" 2>/dev/null) || stamp=''
-    prev=$(cat "$stampfile" 2>/dev/null) || prev=''
-
-    if [ "$stamp" = "$prev" ]; then
+    # Size and time rather than reading the mailbox, the same check as the
+    # footer's ticker (see bin/tmux-mail-changed).
+    if ! "$changed" "$stampfile"; then
       echo ignore
       exit 0
     fi
 
-    printf '%s\n' "$stamp" > "$stampfile"
     echo "reload-sync($self --list)"
     exit 0
     ;;
@@ -94,8 +91,8 @@ case "${1:-}" in
 
     # Our own change must not read as a mailbox change to the next poll, or the
     # list would reload twice.
-    cksum "$mbox" > "$stampfile" 2>/dev/null || true
-    "$status" || true
+    "$changed" "$stampfile" || true
+    "$status" --force || true
     echo "$reply"
     exit 0
     ;;
@@ -126,7 +123,7 @@ fi
 stampfile=$(mktemp "${TMPDIR:-/tmp}/tmux-mail-poll.XXXXXX")
 trap 'rm -f "$stampfile"' EXIT
 export TMUX_MAIL_POLL_STAMP="$stampfile"
-cksum "$mbox" > "$stampfile" 2>/dev/null || true
+"$changed" "$stampfile" || true
 
 # --id-nth is the sender, date and subject, not the position: a delete shifts
 # every later message’s position, and the cursor has to stay on the same message.
