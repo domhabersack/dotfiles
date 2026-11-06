@@ -23,7 +23,8 @@ EOF
 
   # Mock tmux: serves canned `list-windows` output from files this test writes
   # into $MOCK_DIR, and records every `set-window-option` call (the only way to
-  # observe what the script decided to render) into $MOCK_DIR/captured. Only
+  # observe what the script decided to render) into $MOCK_DIR/captured, or
+  # $MOCK_DIR/captured_short for @branch_pr_short. Only
   # shell builtins here: the "gh missing" test runs with PATH stripped to just
   # this directory, so it must serve list-windows on its own.
   cat > "$MOCK_DIR/bin/tmux" <<'EOF'
@@ -37,8 +38,12 @@ case "$1" in
     while IFS= read -r ln; do printf '%s\n' "$ln"; done < "$file"
     ;;
   set-window-option)
-    # $1=set-window-option $2=-t $3=wid $4=@branch_pr $5=value
-    printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured"
+    # $1=set-window-option $2=-t $3=wid $4=@branch_pr|@branch_pr_short $5=value
+    if [ "$4" = @branch_pr_short ]; then
+      printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured_short"
+    else
+      printf '%s\t%s\n' "$3" "$5" >> "$MOCK_DIR/captured"
+    fi
     ;;
   *) : ;;
 esac
@@ -58,6 +63,10 @@ add_window() {
 
 captured_for() {
   grep "^$1	" "$MOCK_DIR/captured" | cut -f2-
+}
+
+captured_short_for() {
+  grep "^$1	" "$MOCK_DIR/captured_short" | cut -f2-
 }
 
 # A git repo on branch `main` with a GitHub origin, at $1.
@@ -271,4 +280,47 @@ write_cache() {
     *"#[fg=colour244]all checks skipped#[default]"*) : ;;
     *) false ;;
   esac
+}
+
+# short_for <cache-json>: the @branch_pr_short a window on main renders from it
+short_for() {
+  add_window 1 1 @1 "$BATS_TEST_TMPDIR/repo"
+  make_repo "$BATS_TEST_TMPDIR/repo"
+  write_cache example-owner/example-repo main "$1"
+  "$SCRIPT"
+  captured_short_for '@1'
+}
+
+@test "sets a short form without commit and file counts, checks as a symbol" {
+  out=$(short_for '{"status":"ok","has":true,"number":42,"commits":12,"additions":120,"deletions":30,"changed":3,"draft":false,"review":"APPROVED","checks_state":"SUCCESS","checks_total":4,"checks_skipped":0,"unresolved":2,"fetched_at":0}')
+  [ "$out" = "$(printf '#[range=user|branch_pr]PR ##42#[norange] · #[fg=colour2]+120#[default] #[fg=colour1]-30#[default] · #[fg=colour2]✓#[default] · #[fg=colour2]approved#[default] · #[fg=colour3]2 unres.#[default]')" ]
+}
+
+@test "short form: failing checks with a count, still-pending ones, and changes requested" {
+  out=$(short_for '{"status":"ok","has":true,"number":9,"commits":2,"additions":1,"deletions":1,"changed":1,"draft":false,"review":"CHANGES_REQUESTED","checks_state":"FAILURE","checks_total":5,"checks_skipped":0,"checks_failed":2,"checks_pending":1,"unresolved":0,"fetched_at":0}')
+  [ "$out" = "$(printf '#[range=user|branch_pr]PR ##9#[norange] · #[fg=colour2]+1#[default] #[fg=colour1]-1#[default] · #[fg=colour1]✗ 2#[default] #[fg=colour3]· 1 pending#[default] · #[fg=colour1]changes req.#[default]')" ]
+}
+
+@test "short form: a draft keeps its marker and drops the review segment" {
+  out=$(short_for '{"status":"ok","has":true,"number":3,"commits":1,"additions":0,"deletions":4,"changed":1,"draft":true,"review":"APPROVED","checks_state":"PENDING","checks_total":2,"checks_skipped":0,"checks_pending":2,"unresolved":0,"fetched_at":0}')
+  [ "$out" = "$(printf '#[range=user|branch_pr]PR ##3 #[fg=colour244](draft)#[default]#[norange] · #[fg=colour2]+0#[default] #[fg=colour1]-4#[default] · #[fg=colour3]2 pending#[default]')" ]
+}
+
+@test "short form: no checks" {
+  out=$(short_for '{"status":"ok","has":true,"number":5,"commits":1,"additions":1,"deletions":0,"changed":1,"draft":false,"review":"","checks_state":"-","checks_total":0,"checks_skipped":0,"unresolved":0,"fetched_at":0}')
+  [ "$out" = "$(printf '#[range=user|branch_pr]PR ##5#[norange] · #[fg=colour2]+1#[default] #[fg=colour1]-0#[default] · #[fg=colour244]no checks#[default]')" ]
+}
+
+@test "short form: every check skipped, and some skipped alongside passes" {
+  out=$(short_for '{"status":"ok","has":true,"number":5,"commits":1,"additions":1,"deletions":0,"changed":1,"draft":false,"review":"","checks_state":"SUCCESS","checks_total":3,"checks_skipped":3,"unresolved":0,"fetched_at":0}')
+  case "$out" in *' · #[fg=colour244]skipped#[default]') : ;; *) false ;; esac
+  : > "$MOCK_DIR/captured_short"
+  write_cache example-owner/example-repo main '{"status":"ok","has":true,"number":5,"commits":1,"additions":1,"deletions":0,"changed":1,"draft":false,"review":"","checks_state":"SUCCESS","checks_total":3,"checks_skipped":1,"unresolved":0,"fetched_at":0}'
+  "$SCRIPT"
+  case "$(captured_short_for '@1')" in *' · #[fg=colour2]✓#[default] #[fg=colour244](1 skipped)#[default]') : ;; *) false ;; esac
+}
+
+@test "leaves the short form empty when there is no PR" {
+  out=$(short_for '{"status":"ok","has":false,"fetched_at":0}')
+  [ "$out" = "" ]
 }

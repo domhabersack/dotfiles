@@ -1,10 +1,11 @@
 #!/bin/sh
 # Renders each attached session's active window's repo health into that
-# window's @repo_pr option, shown on the bottom status row (status-format[2]):
+# window's @repo_pr option, shown on its own status row, above the branch PR
+# row (and @repo_pr_short, the same in fewer columns, for a narrow client):
 #   3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 #   no PRs · no known vulnerabilities
-# The repo name and branch are NOT included here — they render on the row above
-# (status-format[1], from window_name + @git_branch), so this stays health-only.
+# The repo name and branch are NOT included here — they render in the footer's
+# top row (from window_name + @git_branch), so this stays health-only.
 #
 # Mirrors ~/Developer/mission-status's line format and severity color scheme
 # (see bin/tmux-repo-pr-fetch for the exact classification/dedup rules),
@@ -34,7 +35,7 @@ command -v gh >/dev/null 2>&1 || {
   tmux list-windows -a -F '#{window_id}' | while read -r wid; do
     tmux set-window-option -t "$wid" @repo_pr ''
   done
-  # Every @repo_pr is now empty, so the bottom row is always blank — drop to 2.
+  # Every @repo_pr is now empty, so the health row never shows — size the bar down.
   ~/.dotfiles/bin/tmux-status-rows 2>/dev/null || true
   exit 0
 }
@@ -74,10 +75,10 @@ while read -r attached active wid path; do
   cache_file="$CACHE_DIR/$safe.json"
 
   # @repo_pr holds ONLY the PR/vulnerability health, rendered on its own status
-  # row (status-format[2]); the repo name and branch sit on the row above it
-  # (status-format[1], sourced from window_name + @git_branch), so nothing here
-  # repeats them.
+  # row; the repo name and branch sit in the footer's top row (sourced from
+  # window_name + @git_branch), so nothing here repeats them.
   if [ ! -f "$cache_file" ]; then
+    tmux set-window-option -t "$wid" @repo_pr_short "#[fg=colour4]…#[default]"
     tmux set-window-option -t "$wid" @repo_pr "#[fg=colour4]…#[default]"
     nohup ~/.dotfiles/bin/tmux-repo-pr-fetch "$repo" >/dev/null 2>&1 &
     continue
@@ -98,12 +99,14 @@ while read -r attached active wid path; do
   fi
 
   pr_part=''
+  pr_short=''
   if [ "$pr_status" = ok ]; then
     if [ "$pr_total" -eq 0 ]; then
       # Default footer color, not a standout style: no open PRs needs no
       # action, so the human/bot split is noise -- mirrors the vulnerability
       # segment's "no known vulnerabilities" treatment.
       pr_part='no PRs'
+      pr_short='no PRs'
     else
       label=PRs
       [ "$pr_total" -eq 1 ] && label=PR
@@ -120,40 +123,58 @@ while read -r attached active wid path; do
       # Click target (see bin/tmux-open-pr-link): only when a PR is actually
       # listed, matching the "no PRs" branch above staying unranged/unclickable.
       pr_part="#[range=user|repo_pr]#[bold]$pr_total $label#[nobold] $split#[norange]"
+      # Short: the count alone; the human/bot split waits for a wider screen.
+      pr_short="#[range=user|repo_pr]#[bold]$pr_total $label#[nobold]#[norange]"
     fi
   fi
 
   vuln_part=''
+  vuln_short=''
   if [ "$vuln_status" = ok ]; then
     if [ "$vuln_total" -eq 0 ]; then
       # Default footer color, not a standout green: a clean scan needs no
       # action, so it shouldn't compete for attention with the things that do.
       vuln_part='no known vulnerabilities'
+      vuln_short='no vulns'
     else
       # Comma-joined severity list, highest-severity first, only including
       # non-zero buckets -- mirrors mission-status's severityParts.
+      # The short form abbreviates every label: "5 vulns (2 crit, 3 med)".
       sevs=''
-      for triple in "$vuln_critical critical fg=colour196" "$vuln_high high fg=colour208" "$vuln_medium medium fg=colour214" "$vuln_low low fg=colour130" "$vuln_unknown unknown dim"; do
-        # shellcheck disable=SC2086  # deliberate: split "count label style" into positional params
-        set -- $triple
-        part=$(sev_part "$1" "$2" "$3") || continue
+      sevs_short=''
+      for quad in "$vuln_critical critical crit fg=colour196" "$vuln_high high high fg=colour208" "$vuln_medium medium med fg=colour214" "$vuln_low low low fg=colour130" "$vuln_unknown unknown unk dim"; do
+        # shellcheck disable=SC2086  # deliberate: split "count label short-label style" into positional params
+        set -- $quad
+        part=$(sev_part "$1" "$2" "$4") || continue
         sevs="${sevs:+$sevs, }$part"
+        sevs_short="${sevs_short:+$sevs_short, }$(sev_part "$1" "$3" "$4")"
       done
       vuln_label=vulnerabilities
-      [ "$vuln_total" -eq 1 ] && vuln_label=vulnerability
+      vuln_short_label=vulns
+      if [ "$vuln_total" -eq 1 ]; then
+        vuln_label=vulnerability
+        vuln_short_label=vuln
+      fi
       vuln_part="#[bold]$vuln_total $vuln_label#[nobold] ($sevs)"
+      vuln_short="#[bold]$vuln_total $vuln_short_label#[nobold] ($sevs_short)"
     fi
   elif [ "$vuln_status" = disabled ]; then
     # Dependabot is off for this repo: warn (yellow) rather than show the
     # green "no known vulnerabilities", which would falsely imply it was
     # scanned and came back clean.
     vuln_part='#[fg=colour214]dependabot not enabled#[default]'
+    vuln_short='#[fg=colour214]no dependabot#[default]'
   fi
 
-  # Just the health, no name/branch prefix (those live on the row above). Empty
+  # Just the health, no name/branch prefix (those live in the top row). Empty
   # when both halves errored — commonly a repo this account can't read PRs/alerts
-  # on — leaving the bottom row blank while the name+branch row above still shows.
+  # on — so the health row doesn't show at all.
   rendered="${pr_part}${pr_part:+${vuln_part:+ · }}${vuln_part}"
+  # The short form, for a client narrower than @footer_narrow (see tmux.conf),
+  # set first and alongside every non-empty @repo_pr; a cleared @repo_pr takes
+  # the whole row away, so a leftover short form is never drawn.
+  rendered_short="${pr_short}${pr_short:+${vuln_short:+ · }}${vuln_short}"
+  tmux set-window-option -t "$wid" @repo_pr_short "$rendered_short"
   tmux set-window-option -t "$wid" @repo_pr "$rendered"
 
   age=$(( now - fetched_at ))
@@ -163,8 +184,8 @@ while read -r attached active wid path; do
   fi
 done
 
-# Size the bar to whether the now-updated @repo_pr gives the bottom row
-# anything to show (2 vs 3 rows), then repaint so both the freshly-set @repo_pr
+# Size the bar to whether the now-updated @repo_pr gives the health row
+# anything to show, then repaint so both the freshly-set @repo_pr
 # and any height change show immediately, not just on the next status-interval
 # tick.
 ~/.dotfiles/bin/tmux-status-rows 2>/dev/null || true

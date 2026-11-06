@@ -10,15 +10,29 @@ setup() {
   mkdir -p "$MOCK_DIR/bin"
 
   # Mock tmux: display-message serves a fixed server pid and start time (for
-  # the stamp's name), show-option serves the current @mail from $MOCK_DIR/current,
-  # set-option records its value into $MOCK_DIR/set (absent if never called),
-  # refresh-client counts its calls.
+  # the stamp's name), show-option serves the current @mail from $MOCK_DIR/current
+  # (@mail_short from $MOCK_DIR/current_short),
+  # set-option records @mail's value into $MOCK_DIR/set and @mail_short's
+  # into $MOCK_DIR/set_short (absent if never called), refresh-client counts
+  # its calls.
   cat > "$MOCK_DIR/bin/tmux" <<'EOF'
 #!/bin/sh
 case "$1" in
   display-message) echo 4242-1700000000 ;;
-  show-option) cat "$MOCK_DIR/current" 2>/dev/null || true ;;
-  set-option) printf '%s' "$4" > "$MOCK_DIR/set" ;;
+  show-option)
+    if [ "$3" = @mail_short ]; then
+      cat "$MOCK_DIR/current_short" 2>/dev/null || true
+    else
+      cat "$MOCK_DIR/current" 2>/dev/null || true
+    fi
+    ;;
+  set-option)
+    if [ "$3" = @mail_short ]; then
+      printf '%s' "$4" > "$MOCK_DIR/set_short"
+    else
+      printf '%s' "$4" > "$MOCK_DIR/set"
+    fi
+    ;;
   refresh-client) echo x >> "$MOCK_DIR/refreshes" ;;
 esac
 EOF
@@ -39,6 +53,13 @@ message() { # message <sender> <status-or-empty>
   [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 agent (2) · daemon (1)#[norange]" ]
 }
 
+@test "sets a short form with just the unread total" {
+  { message agent ''; message daemon ''; message agent ''; message agent RO; } > "$MAIL"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$MOCK_DIR/set_short")" = "#[range=user|mail]📧 3#[norange]" ]
+}
+
 @test "does not count read messages" {
   { message agent RO; message daemon ''; } > "$MAIL"
   run "$SCRIPT"
@@ -51,14 +72,18 @@ message() { # message <sender> <status-or-empty>
   run "$SCRIPT"
   [ -f "$MOCK_DIR/set" ]
   [ -z "$(cat "$MOCK_DIR/set")" ]
+  [ -f "$MOCK_DIR/set_short" ]
+  [ -z "$(cat "$MOCK_DIR/set_short")" ]
 }
 
 @test "leaves tmux alone when the value has not changed" {
   message agent '' > "$MAIL"
   printf '%s' "#[range=user|mail]📧 agent (1)#[norange]" > "$MOCK_DIR/current"
+  printf '%s' "#[range=user|mail]📧 1#[norange]" > "$MOCK_DIR/current_short"
   run "$SCRIPT"
   [ "$status" -eq 0 ]
   [ ! -f "$MOCK_DIR/set" ]
+  [ ! -f "$MOCK_DIR/set_short" ]
   [ ! -f "$MOCK_DIR/refreshes" ]
 }
 
@@ -72,6 +97,7 @@ message() { # message <sender> <status-or-empty>
   message 'a#b' '' > "$MAIL"
   run "$SCRIPT"
   [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 a##b (1)#[norange]" ]
+  [ "$(cat "$MOCK_DIR/set_short")" = "#[range=user|mail]📧 1#[norange]" ]
 }
 
 @test "shows nothing when there is no mailbox" {
@@ -113,6 +139,13 @@ message() { # message <sender> <status-or-empty>
   message agent '' > "$MAIL"
   "$SCRIPT"
   [ -f "$TMPDIR/tmux-mail-status.$(id -u).4242-1700000000" ]
+}
+
+@test "sets a missing short form even when @mail is already current" {
+  message agent '' > "$MAIL"
+  printf '%s' "#[range=user|mail]📧 agent (1)#[norange]" > "$MOCK_DIR/current"
+  run "$SCRIPT" --force
+  [ "$(cat "$MOCK_DIR/set_short")" = "#[range=user|mail]📧 1#[norange]" ]
 }
 
 @test "steals a lock left by a run that died, and releases its own" {

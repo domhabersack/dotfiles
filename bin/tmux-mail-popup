@@ -133,13 +133,15 @@ export TMUX_MAIL_POLL_STAMP="$stampfile"
 
 # --id-nth is the sender, date and subject, not the position: a delete shifts
 # every later message’s position, and the cursor has to stay on the same message.
+# The preview moves below the list once it would be under 40 columns, as in a
+# full-width popup on a phone.
 list | "$fzf" \
   --ansi --delimiter="$us" --with-nth=1 --no-sort \
   --track --id-nth=4,5,6 \
   --layout=reverse --header-first --highlight-line --cycle \
   --prompt='mail> ' --info=inline-right \
   --header='space/enter toggle read · ctrl-d delete · ctrl-r refresh · esc close' \
-  --preview="$feed --body {2}" --preview-window='right,55%,wrap' \
+  --preview="$feed --body {2}" --preview-window='right,55%,wrap,<40(down,50%,wrap)' \
   --bind="space:transform:$self --act toggle {}" \
   --bind="enter:transform:$self --act toggle {}" \
   --bind="ctrl-d:transform:$self --act delete {}" \

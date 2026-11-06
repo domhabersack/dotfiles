@@ -68,18 +68,19 @@ program emitting an actual bell character — for Claude Code, set
 `"preferredNotifChannel": "terminal_bell"` in `~/.claude/settings.json`.
 Without it, Claude uses desktop notifications instead and the 🔔 never appears.
 
-The same bells also drive a **notification indicator** on the right of the
+The same bells also drive a **notification indicator** on the bottom row of the
 status bar, so you can tell another window wants attention *without* opening
 choose-tree: `bin/tmux-notify-windows` lists the current session's windows that
 have a pending bell as `🔔 codeshots · api` (empty when none), writing it into
 that session's `status-right`. It's per-session, updates the moment a bell
 arrives (the `alert-bell` hook, not just the status-interval tick), and clears
 a window from the list as soon as you visit it — the same `window_bell_flag`
-signal behind the 🔔 in the window list above.
+signal behind the 🔔 in the window list above. Each entry is a click target
+that selects its window.
 
-**Local mail** shows up next to it. Anything that delivers to this machine’s
-mailbox (`/var/mail/<you>`, or `$MAIL`) is surfaced on the right of the top
-status row, after the 🔔 list, as the unread count per sender:
+**Local mail** shows up in the top status row, between the window’s name and
+its branch. Anything that delivers to this machine’s mailbox (`/var/mail/<you>`,
+or `$MAIL`) is surfaced there as the unread count per sender:
 `📧 agent (2) · daemon (1)`. It is empty, and so absent, when nothing is
 unread. The idea is that another profile on the same machine, such as an agent
 profile running Claude Code in a loop, can tell you it is stuck with a plain
@@ -281,21 +282,23 @@ worktree by hand -- a plain `cd`, not through `git-worktree-new` -- still
 gets it, and a repo submodule’s own worktree is never mistaken for its
 superproject’s.
 
-The status bar carries the active window's identity, the open PR for its
-branch, and repo-wide health on up to four stacked rows (below the horizontal
-rule):
+The status bar carries the active window's identity, repo-wide health, the open
+PR for its branch, and the bell list on up to four stacked rows:
 
-1. **Name + branch** (`status-format[1]`, from `window_name` + `@git_branch`) —
-   always present; the window name plus, in a git repo, its branch.
-2. **Branch PR** (`status-format[2]`, from `@branch_pr`) — the open pull request
+1. **Name + branch** (from `window_name` + `@git_branch`) — always present, set
+   into the horizontal rule above the rows like a legend; the window name plus,
+   in a git repo, its branch, then any unread mail.
+2. **Repo health** (`@repo_pr`, from `status-left`) — that repo's open-PR and
+   Dependabot-vulnerability *counts* across the whole repo, kept off the name so
+   it doesn't crowd it. The `N PRs (...)` part is a click target too, whenever
+   there's at least one open PR.
+3. **Branch PR** (from `@branch_pr`) — the open pull request
    whose head *is* the current branch, if one exists: its number, commit count,
    diff size, checks, review state, and unresolved conversations. This is "open work"
    visibility — the state of the PR the window in front of you is producing. The
    `PR #42` (or `PR #42 (draft)`) part of the row is a click target — see below.
-3. **Repo health** (`@repo_pr`, from `status-left`) — that repo's open-PR and
-   Dependabot-vulnerability *counts* across the whole repo, kept off the name so
-   it doesn't crowd it. The `N PRs (...)` part is a click target too, whenever
-   there's at least one open PR.
+4. **Bells** (`status-right`) — the windows with a pending bell, see above;
+   always present, blank when none.
 
 Clicking either PR click target opens the relevant page on GitHub in the
 default browser (`bin/tmux-open-pr-link`, bound to `MouseDown1Status` in
@@ -304,18 +307,41 @@ repo-health count opens the repo's pull-requests listing. Both rely on
 tmux's `#[range=user|...]` status-format marker, which fires regardless of
 which status row the marked text ends up on.
 
-The branch-PR and health rows are independent axes and each shows only when it
-has something; the branch-PR row sits above the health row, so when there's no
-PR the health row slides up. For whichever repo the active pane is in, e.g.:
+The health and branch-PR rows are independent axes and each shows only when it
+has something. The bar grows upward from the bottom of the terminal, so those
+two sit in the middle: the bell list never moves, and the branch-PR row, when
+there is one, is always right above it. For whichever repo the active pane is
+in, e.g.:
 
 ```
-dotfiles feat/foo
-PR #42 · 12 commits · 3 files · +120 -30 · all checks have passed · approved · 2 unresolved
+─ dotfiles ─ 📧 agent (1) ─ feat/foo ─────────────────────────────────────────────
 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
+PR #42 · 12 commits · 3 files · +120 -30 · all checks have passed · approved · 2 unresolved
+🔔 codeshots · api
 ```
+
+On a client narrower than `@footer_narrow` (60 columns, set in `tmux.conf`;
+Termius on a phone, say), every row switches to a short form, so nothing that
+matters is cut off at the edge:
+
+```
+─ dotfiles ─ 📧 1 ─ feat/foo ─────────────
+3 PRs · 5 vulns (2 crit, 1 high, 2 med)
+PR #42 · +120 -30 · ✓ · approved · 2 unres.
+🔔 codeshots · api
+```
+
+The name and worktree badge are cut to 14 characters, the branch to its last 16,
+and each bell entry to 10, each with a `…` added when cut. Mail sits before the
+branch, so on a screen just too wide for the short forms it's the branch that
+runs off the end, not the mail. The scripts set each short form (`@mail_short`,
+`@repo_pr_short`, `@branch_pr_short`, `@bells_short`) alongside the full one.
+The test runs per client, so a phone and a wide screen attached at the same time
+each get their own. The mail popup takes the full width there too, with its
+preview below the list.
 
 `bin/tmux-status-rows` sizes the bar to exactly what's on it — two rows (rule +
-name) when neither content row has anything, three when one does, four when
+bells) when neither content row has anything, three when one does, four when
 both — rather than leaving an empty trailing line. It's called from the tail of
 `bin/tmux-branch-pr` and `bin/tmux-repo-pr` (so it re-evaluates on every
 window/pane switch and cache update) and from the `pane-mode-changed` hook when
