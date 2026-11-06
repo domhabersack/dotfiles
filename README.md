@@ -78,8 +78,8 @@ a window from the list as soon as you visit it — the same `window_bell_flag`
 signal behind the 🔔 in the window list above. Each entry is a click target
 that selects its window.
 
-**Local mail** shows up in the top status row, after the window’s name and
-branch. Anything that delivers to this machine’s mailbox (`/var/mail/<you>`,
+**Local mail** shows up in the top status row, between the window’s name and
+its branch. Anything that delivers to this machine’s mailbox (`/var/mail/<you>`,
 or `$MAIL`) is surfaced there as the unread count per sender:
 `📧 agent (2) · daemon (1)`. It is empty, and so absent, when nothing is
 unread. The idea is that another profile on the same machine, such as an agent
@@ -313,7 +313,7 @@ there is one, is always right above it. For whichever repo the active pane is
 in, e.g.:
 
 ```
-─ dotfiles feat/foo ─ 📧 agent (1) ─────────────────────────────────────────────
+─ dotfiles ─ 📧 agent (1) ─ feat/foo ─────────────────────────────────────────────
 3 PRs (2 human, 1 bot) · 5 vulnerabilities (2 critical, 1 high, 2 medium)
 PR #42 · 12 commits · 3 files · +120 -30 · all checks have passed · approved · 2 unresolved
 🔔 codeshots · api
@@ -330,14 +330,14 @@ PR #42 · +120 -30 · ✓ · approved · 2 unres.
 🔔 codeshots · api
 ```
 
-The name and worktree badge are cut to 14 characters, the branch to its last
-16, and each bell entry to 10, each with a `…` added when cut. Mail sits before
-the branch, so on a screen just too wide for the short forms it's the branch
-that runs off the end, not the mail. The scripts set each short form (`@mail_short`, `@repo_pr_short`,
-`@branch_pr_short`, `@bells_short`) alongside the full one. The test runs per
-client, so a phone and a wide screen attached at the same time each get their
-own. The mail popup takes the full width there too, with its preview below the
-list.
+The name and worktree badge are cut to 14 characters, the branch to its last 16,
+and each bell entry to 10, each with a `…` added when cut. Mail sits before the
+branch, so on a screen just too wide for the short forms it's the branch that
+runs off the end, not the mail. The scripts set each short form (`@mail_short`,
+`@repo_pr_short`, `@branch_pr_short`, `@bells_short`) alongside the full one.
+The test runs per client, so a phone and a wide screen attached at the same time
+each get their own. The mail popup takes the full width there too, with its
+preview below the list.
 
 `bin/tmux-status-rows` sizes the bar to exactly what's on it — two rows (rule +
 bells) when neither content row has anything, three when one does, four when
