@@ -25,8 +25,9 @@ set -eu
 stamp=${1:?usage: tmux-mail-changed <stampfile>}
 mbox=${MAIL:-/var/mail/$(id -un)}
 
-# "none" for a missing mailbox, so it reads as unchanged until one appears.
-size=$(wc -c < "$mbox" 2>/dev/null | tr -d ' ') || size=''
+# "none" for a missing mailbox, so it reads as unchanged until one appears. The
+# braces put the redirect's own "No such file" under the 2>/dev/null too.
+size=$({ wc -c < "$mbox"; } 2>/dev/null | tr -d ' ') || size=''
 size=${size:-none}
 prev=$(cat "$stamp" 2>/dev/null) || prev=''
 
@@ -42,6 +43,11 @@ if [ "$isChanged" = false ]; then
 fi
 
 # Written whole and moved into place, so the stamp's time is set only once
-# the size in it is.
-printf '%s\n' "$size" > "$stamp.tmp"
-mv "$stamp.tmp" "$stamp"
+# the size in it is. A stamp that can't be written (a full disk, say) still
+# reports the change: every call then reads as changed, which costs a parse a
+# tick rather than freezing the footer on what it last showed.
+tmp=$(mktemp "$stamp.XXXXXX" 2>/dev/null) || exit 0
+if ! { printf '%s\n' "$size" > "$tmp" && mv "$tmp" "$stamp"; } 2>/dev/null; then
+  rm -f "$tmp"
+fi
+exit 0

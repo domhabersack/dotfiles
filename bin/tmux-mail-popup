@@ -108,12 +108,15 @@ fi
 if [ -z "$fzf" ]; then
   # As the system mailbox with hold set, for the same reason as
   # bin/tmux-mail-action: the lock, and nothing moved to ~/mbox. MAILRC
-  # replaces ~/.mailrc, so that is sourced first.
+  # replaces the user's own rc file, so that is sourced first -- quoted, or a
+  # path with a space in it fails to source and hold is never set.
+  userrc=${MAILRC:-$HOME/.mailrc}
   rc=$(mktemp "${TMPDIR:-/tmp}/tmux-mail-rc.XXXXXX")
-  [ -f "$HOME/.mailrc" ] && printf 'source %s\n' "$HOME/.mailrc" > "$rc"
+  trap 'rm -f "$rc"' EXIT
+  trap 'exit 1' HUP INT TERM
+  [ -f "$userrc" ] && printf 'source "%s"\n' "$userrc" > "$rc"
   printf 'set hold\n' >> "$rc"
   MAILRC=$rc MAIL=$mbox mail || { echo 'No mail'; sleep 2; }
-  rm -f "$rc"
   exit 0
 fi
 
@@ -122,6 +125,9 @@ fi
 # fzf.
 stampfile=$(mktemp "${TMPDIR:-/tmp}/tmux-mail-poll.XXXXXX")
 trap 'rm -f "$stampfile"' EXIT
+# Closing the popup hangs up on this script; exiting turns that into the trap
+# above.
+trap 'exit 1' HUP INT TERM
 export TMUX_MAIL_POLL_STAMP="$stampfile"
 "$changed" "$stampfile" || true
 

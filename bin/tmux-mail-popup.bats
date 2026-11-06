@@ -121,3 +121,26 @@ plain() { sed "s/$ESC\[[0-9;]*m//g"; }
   [ "$status" -eq 0 ]
   if grep -q 'nothing done' "$MOCK_DIR/tmux-calls" 2>/dev/null; then false; fi
 }
+
+@test "without fzf, opens mail with hold set and sources a user rc whose path has a space" {
+  home="$BATS_TEST_TMPDIR/my home"
+  mkdir -p "$home"
+  printf 'set ask\n' > "$home/.mailrc"
+  cat > "$MOCK_DIR/bin/mail" <<'MOCK'
+#!/bin/sh
+cat "$MAILRC" > "$MOCK_DIR/mailrc"
+MOCK
+  HOME="$home" PATH="$MOCK_DIR/bin:/usr/bin:/bin" run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$MOCK_DIR/mailrc")" = "$(printf 'source "%s"\nset hold' "$home/.mailrc")" ]
+}
+
+@test "without fzf, sources an rc named by MAILRC instead of ~/.mailrc" {
+  printf 'set ask\n' > "$BATS_TEST_TMPDIR/rc"
+  cat > "$MOCK_DIR/bin/mail" <<'MOCK'
+#!/bin/sh
+cat "$MAILRC" > "$MOCK_DIR/mailrc"
+MOCK
+  MAILRC="$BATS_TEST_TMPDIR/rc" HOME="$BATS_TEST_TMPDIR" PATH="$MOCK_DIR/bin:/usr/bin:/bin" run "$SCRIPT"
+  [ "$(cat "$MOCK_DIR/mailrc")" = "$(printf 'source "%s"\nset hold' "$BATS_TEST_TMPDIR/rc")" ]
+}
