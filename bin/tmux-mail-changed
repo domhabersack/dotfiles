@@ -1,0 +1,53 @@
+#!/bin/sh
+# Tells whether the local mailbox (MAIL, default /var/mail/<user>) changed
+# since the last call with the same stamp file, without reading it:
+#
+#   tmux-mail-changed <stampfile>   exit 0 if it changed (or on the first
+#                                   call), 1 if not
+#
+# On a change, the mailbox's new state is recorded in <stampfile>, so the next
+# call compares against that. A caller that reads the mailbox after a 0 reads
+# it after the state was recorded, so a delivery landing mid-read counts as a
+# change next time rather than being missed.
+#
+# The state is the mailbox's size, plus its modification time compared with
+# the stamp file's own (find -newer; stat's flags differ between macOS and
+# the Linux CI runner). Size catches almost everything -- a delivery always
+# grows the file, and marking a message read or unread or deleting one changes
+# its length -- and the time catches the rest, such as a delete and a delivery
+# that happen to cancel out. wc -c takes a regular file's size from the file
+# system rather than reading it.
+#
+# Used by bin/tmux-mail-status, so its ticker parses the mailbox only when
+# something happened, and by the mail popup's poll (bin/tmux-mail-popup).
+set -eu
+
+stamp=${1:?usage: tmux-mail-changed <stampfile>}
+mbox=${MAIL:-/var/mail/$(id -un)}
+
+# "none" for a missing mailbox, so it reads as unchanged until one appears. The
+# braces put the redirect's own "No such file" under the 2>/dev/null too.
+size=$({ wc -c < "$mbox"; } 2>/dev/null | tr -d ' ') || size=''
+size=${size:-none}
+prev=$(cat "$stamp" 2>/dev/null) || prev=''
+
+isChanged=true
+if [ "$size" = "$prev" ] && [ -z "$(find "$mbox" -newer "$stamp" 2>/dev/null)" ]; then
+  isChanged=false
+fi
+
+# An unchanged mailbox leaves the stamp alone: rewriting it would move its
+# time past a same-size change landing right after the check above.
+if [ "$isChanged" = false ]; then
+  exit 1
+fi
+
+# Written whole and moved into place, so the stamp's time is set only once
+# the size in it is. A stamp that can't be written (a full disk, say) still
+# reports the change: every call then reads as changed, which costs a parse a
+# tick rather than freezing the footer on what it last showed.
+tmp=$(mktemp "$stamp.XXXXXX" 2>/dev/null) || exit 0
+if ! { printf '%s\n' "$size" > "$tmp" && mv "$tmp" "$stamp"; } 2>/dev/null; then
+  rm -f "$tmp"
+fi
+exit 0

@@ -1,0 +1,86 @@
+#!/bin/sh
+# Sets the global option @mail to the footer’s mail indicator -- unread
+# messages counted per sender, "📧 agent (2) · daemon (1)", senders in the
+# order their first unread message arrived -- or to nothing when there is no
+# unread mail. status-format[1] in tmux.conf draws it on the right of the top
+# row, after the 🔔 list; a click on it opens the mail popup (the range tag is
+# "mail", see the MouseDown1Status binding).
+#
+# Global rather than per-session, unlike the bell list in status-right: the
+# mailbox belongs to the user, not to any one tmux session, so every client
+# should show the same thing.
+#
+# Run by bin/tmux-mail-watch on a ticker, and directly by the popup
+# (bin/tmux-mail-popup) after it changes a message, with --force, so the
+# footer follows a toggle or delete without waiting for the next tick. The
+# mailbox is only parsed when bin/tmux-mail-changed says it changed (always
+# with --force), and the option is only rewritten, and the bar only repainted,
+# when its value actually changed.
+#
+# The stamp that check keeps is per tmux server (its pid and start time), so
+# two servers -- `tmux -L` -- each keep their own @mail current instead of one's
+# parse making the other skip, and a new server never inherits an old one's
+# stamp through a reused pid. tmux.conf runs this with --force anyway, so a
+# fresh server or a reload always starts from a real parse.
+set -eu
+
+bindir=$(dirname "$0")
+feed="$bindir/tmux-mail-feed"
+us=$(printf '\037')
+
+server=$(tmux display-message -p '#{pid}-#{start_time}' 2>/dev/null) || server=''
+stamp="${TMPDIR:-/tmp}/tmux-mail-status.$(id -u).${server:-none}"
+
+# One run at a time per server, from the check through the set: otherwise a
+# ticker run that read the mailbox just before the popup changed it could set
+# its stale value after the popup's own run set the right one, and with the
+# stamp already matching the mailbox, nothing would correct it until the next
+# change. A run waits its turn rather than skipping it, since a --force run
+# must not be lost; it gives up after 30s, which only a stuck holder takes.
+# shellcheck source=./tmux-locklib
+. "$bindir/tmux-locklib"
+lock="$stamp.lock"
+tries=0
+until lock_acquire "$lock"; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 300 ] || exit 0
+  sleep 0.1
+done
+trap 'rm -rf "$lock"' EXIT
+
+if ! "$bindir/tmux-mail-changed" "$stamp" && [ "${1:-}" != --force ]; then
+  exit 0
+fi
+
+summary=$("$feed" | awk -F "$us" '
+  $2 == "U" {
+    if (!($3 in count)) order[++senders] = $3
+    count[$3]++
+  }
+  END {
+    for (i = 1; i <= senders; i++) {
+      printf "%s%s (%d)", (i > 1 ? " · " : ""), order[i], count[order[i]]
+    }
+  }
+')
+
+value=''
+if [ -n "$summary" ]; then
+  # # starts a tmux style sequence, so a literal one in a sender name is doubled.
+  summary=$(printf '%s' "$summary" | sed 's/#/##/g')
+  value="#[range=user|mail]📧 $summary#[norange]"
+fi
+
+current=$(tmux show-option -gqv @mail 2>/dev/null) || current=''
+isUnchanged=false
+[ "$value" = "$current" ] && isUnchanged=true
+
+if [ "$isUnchanged" = true ]; then
+  exit 0
+fi
+
+tmux set-option -g @mail "$value"
+
+# `|| true` so a run with no client attached (nothing to repaint) doesn't fail
+# the script under `set -e`.
+tmux refresh-client -S 2>/dev/null || true
