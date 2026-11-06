@@ -113,6 +113,25 @@ EOF
   [ "$("$SCRIPT" | wc -l | tr -d ' ')" = 1 ]
 }
 
+@test "does not split a message at a From line after a blank line that has no time, as mail doesn't" {
+  cat > "$MAIL" <<'EOF'
+From a  Tue Nov  3 14:09:01 2026
+Subject: one
+
+before
+
+From Alice Mon Tue and Wed we met
+after
+
+From b  Tue Nov  3 15:30:00 2026
+Subject: two
+
+b
+EOF
+  [ "$("$SCRIPT" | wc -l | tr -d ' ')" = 2 ]
+  [ "$(line_of 2)" = "2|U|b|Nov 3 15:30|two" ]
+}
+
 @test "--body prints From, Date, Subject and the body of just that message" {
   cat > "$MAIL" <<'EOF'
 From a  Tue Nov  3 14:09:01 2026

@@ -9,14 +9,22 @@ setup() {
   export MOCK_DIR="$BATS_TEST_TMPDIR/mock"
   mkdir -p "$MOCK_DIR/bin"
 
-  # Mock mail: records its arguments, the mailbox it was given in $MAIL and
-  # the commands piped to it, so a test
+  # Mock mail: records its arguments, the mailbox it was given in $MAIL, its
+  # MAILRC and the commands piped to it, so a test
   # can see what would have been done to the mailbox without a real mail (BSD
   # mail isn't on the CI runner).
+  # With -f it is the read-only count query: it answers with a header line
+  # for message $MOCK_COUNT, as real mail does for `from $`.
   cat > "$MOCK_DIR/bin/mail" <<'EOF'
 #!/bin/sh
+if [ "$3" = -f ]; then
+  cat > /dev/null
+  printf '>U  %s agent  Tue Nov  3 14:09  5/80   "one"\n' "${MOCK_COUNT:-2}"
+  exit 0
+fi
 printf '%s\n' "$*" > "$MOCK_DIR/args"
 printf '%s\n' "$MAIL" > "$MOCK_DIR/mailbox"
+printf '%s\n' "$MAILRC" > "$MOCK_DIR/mailrc"
 cat > "$MOCK_DIR/stdin"
 EOF
   chmod +x "$MOCK_DIR/bin/mail"
@@ -76,6 +84,18 @@ line_of() { "$FEED" | sed -n "${1}p"; }
   stale=$(line_of 1)
   sed 's/^Subject: one$/Subject: one\nStatus: R/' "$MAIL" > "$MAIL.new" && mv "$MAIL.new" "$MAIL"
   run "$SCRIPT" toggle "$stale"
+  [ "$status" -eq 1 ]
+  [ ! -f "$MOCK_DIR/stdin" ]
+}
+
+@test "keeps the user's own mail settings out of the change" {
+  MAILRC="$BATS_TEST_TMPDIR/rc" run "$SCRIPT" toggle "$(line_of 1)"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$MOCK_DIR/mailrc")" = /dev/null ]
+}
+
+@test "refuses when mail counts a different number of messages than the feed" {
+  MOCK_COUNT=3 run "$SCRIPT" delete "$(line_of 2)"
   [ "$status" -eq 1 ]
   [ ! -f "$MOCK_DIR/stdin" ]
 }

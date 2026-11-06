@@ -23,7 +23,13 @@
 # Messages are split on envelope "From " lines that follow a blank line (or
 # start the file), not on any line starting with "From ": a body line that
 # happens to start that way is escaped to ">From " by the local delivery agent,
-# and this check keeps one that wasn’t from splitting a message in two.
+# and this check keeps one that wasn’t from splitting a message in two. The
+# line must also carry a weekday, month, day and time, as mail itself requires
+# of an envelope line: "From Alice Mon Tue and Wed we met" after a blank line
+# is body text to mail, and counting it as a message here would put every
+# later index one ahead of mail's, so the popup would change the wrong one.
+# bin/tmux-mail-action also refuses when the two counts differ, for anything
+# this check still gets wrong.
 set -eu
 
 mbox=${MAIL:-/var/mail/$(id -un)}
@@ -69,7 +75,7 @@ function finish(   st, subj) {
 
 { sub(/\r$/, "") }
 
-prevblank && /^From [^ ]+ +[A-Z][a-z][a-z] [A-Z][a-z][a-z] / {
+prevblank && /^From [^ ]+ +[A-Z][a-z][a-z] [A-Z][a-z][a-z] +[0-9]+ [0-9][0-9]:[0-9][0-9]/ {
   finish()
   n++
   env = $2

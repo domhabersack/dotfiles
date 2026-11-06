@@ -13,11 +13,17 @@ setup() {
   export MOCK_DIR="$BATS_TEST_TMPDIR/mock"
   mkdir -p "$MOCK_DIR/bin"
 
-  # Mock mail and tmux: mail records that it was called; tmux records its
-  # arguments, standing in for the status refresh the --act mode runs
-  # afterwards and the message it shows on a refusal.
+  # Mock mail and tmux: mail records that it was called (and answers the
+  # action's read-only count query, -f, with the mailbox's 2 messages); tmux
+  # records its arguments, standing in for the status refresh the --act mode
+  # runs afterwards and the message it shows on a refusal.
   cat > "$MOCK_DIR/bin/mail" <<'EOF'
 #!/bin/sh
+if [ "$3" = -f ]; then
+  cat > /dev/null
+  echo ' U  2 daemon  Tue Nov  3 15:30  5/80   "newer"'
+  exit 0
+fi
 cat > "$MOCK_DIR/mail-stdin"
 EOF
   cat > "$MOCK_DIR/bin/tmux" <<'EOF'
