@@ -9,14 +9,14 @@ setup() {
   export MOCK_DIR="$BATS_TEST_TMPDIR/mock"
   mkdir -p "$MOCK_DIR/bin"
 
-  # Mock tmux: display-message serves a fixed server pid (for the stamp's
-  # name), show-option serves the current @mail from $MOCK_DIR/current,
+  # Mock tmux: display-message serves a fixed server pid and start time (for
+  # the stamp's name), show-option serves the current @mail from $MOCK_DIR/current,
   # set-option records its value into $MOCK_DIR/set (absent if never called),
   # refresh-client counts its calls.
   cat > "$MOCK_DIR/bin/tmux" <<'EOF'
 #!/bin/sh
 case "$1" in
-  display-message) echo 4242 ;;
+  display-message) echo 4242-1700000000 ;;
   show-option) cat "$MOCK_DIR/current" 2>/dev/null || true ;;
   set-option) printf '%s' "$4" > "$MOCK_DIR/set" ;;
   refresh-client) echo x >> "$MOCK_DIR/refreshes" ;;
@@ -109,8 +109,8 @@ message() { # message <sender> <status-or-empty>
   [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 agent (1)#[norange]" ]
 }
 
-@test "keeps a separate stamp per tmux server" {
+@test "keeps a separate stamp per tmux server, by pid and start time" {
   message agent '' > "$MAIL"
   "$SCRIPT"
-  [ -f "$TMPDIR/tmux-mail-status.$(id -u).4242" ]
+  [ -f "$TMPDIR/tmux-mail-status.$(id -u).4242-1700000000" ]
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 # shellcheck disable=SC2030,SC2031  # bats: subshell-scoped exports are how @test isolates each case
+bats_require_minimum_version 1.5.0
 
 SCRIPT="$BATS_TEST_DIRNAME/tmux-mail-changed"
 
@@ -49,4 +50,20 @@ setup() {
   [ "$status" -eq 0 ]
   run "$SCRIPT" "$STAMP"
   [ "$status" -eq 1 ]
+}
+
+@test "says nothing on stderr about a missing mailbox" {
+  rm "$MAIL"
+  run --separate-stderr "$SCRIPT" "$STAMP"
+  [ -z "$stderr" ]
+}
+
+@test "reports a change when the stamp cannot be written, rather than freezing" {
+  mkdir "$BATS_TEST_TMPDIR/locked"
+  chmod 500 "$BATS_TEST_TMPDIR/locked"
+  run "$SCRIPT" "$BATS_TEST_TMPDIR/locked/stamp"
+  [ "$status" -eq 0 ]
+  run "$SCRIPT" "$BATS_TEST_TMPDIR/locked/stamp"
+  [ "$status" -eq 0 ]
+  chmod 700 "$BATS_TEST_TMPDIR/locked"
 }
