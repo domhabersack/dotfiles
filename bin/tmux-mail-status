@@ -32,6 +32,24 @@ us=$(printf '\037')
 
 server=$(tmux display-message -p '#{pid}-#{start_time}' 2>/dev/null) || server=''
 stamp="${TMPDIR:-/tmp}/tmux-mail-status.$(id -u).${server:-none}"
+
+# One run at a time per server, from the check through the set: otherwise a
+# ticker run that read the mailbox just before the popup changed it could set
+# its stale value after the popup's own run set the right one, and with the
+# stamp already matching the mailbox, nothing would correct it until the next
+# change. A run waits its turn rather than skipping it, since a --force run
+# must not be lost; it gives up after 30s, which only a stuck holder takes.
+# shellcheck source=./tmux-locklib
+. "$bindir/tmux-locklib"
+lock="$stamp.lock"
+tries=0
+until lock_acquire "$lock"; do
+  tries=$((tries + 1))
+  [ "$tries" -lt 300 ] || exit 0
+  sleep 0.1
+done
+trap 'rm -rf "$lock"' EXIT
+
 if ! "$bindir/tmux-mail-changed" "$stamp" && [ "${1:-}" != --force ]; then
   exit 0
 fi

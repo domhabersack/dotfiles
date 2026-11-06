@@ -91,8 +91,9 @@ whatever does the sending; this repo only receives, so a quick test is:
 echo "I need an API key" | mail -s "agent is stuck" "$USER"
 ```
 
-`bin/tmux-mail-watch` re-reads the mailbox every 5 seconds and
-`bin/tmux-mail-status` keeps the indicator current. `<prefix> m`, or a click on
+`bin/tmux-mail-watch` checks the mailbox once a minute (its size and time, and
+only reads it when they changed) and `bin/tmux-mail-status` keeps the indicator
+current. `<prefix> m`, or a click on
 the 📧 entry, opens a popup (`bin/tmux-mail-popup`): an fzf list of every
 message, newest first, unread ones bold with a ●, and the highlighted message’s
 text in the preview. Looking at a message does not mark it read. Instead:

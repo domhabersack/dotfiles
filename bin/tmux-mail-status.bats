@@ -147,3 +147,25 @@ message() { # message <sender> <status-or-empty>
   run "$SCRIPT" --force
   [ "$(cat "$MOCK_DIR/set_short")" = "#[range=user|mail]📧 1#[norange]" ]
 }
+
+@test "steals a lock left by a run that died, and releases its own" {
+  message agent '' > "$MAIL"
+  lock="$TMPDIR/tmux-mail-status.$(id -u).4242-1700000000.lock"
+  mkdir "$lock"
+  # A pid no process has: the highest one possible is far below this.
+  echo 999999999 > "$lock/pid"
+  run "$SCRIPT"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 agent (1)#[norange]" ]
+  [ ! -d "$lock" ]
+}
+
+@test "waits for a run in progress instead of skipping" {
+  message agent '' > "$MAIL"
+  lock="$TMPDIR/tmux-mail-status.$(id -u).4242-1700000000.lock"
+  mkdir "$lock"
+  sleep 1 &
+  echo $! > "$lock/pid"
+  run "$SCRIPT" --force
+  [ "$(cat "$MOCK_DIR/set")" = "#[range=user|mail]📧 agent (1)#[norange]" ]
+}

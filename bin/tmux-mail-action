@@ -12,7 +12,9 @@
 # shifts the positions, so the line is checked against what is at that position
 # now and the change is refused, exit 1, when it no longer matches: better a
 # "nothing done" than a different message deleted. The popup then reloads and
-# shows the mailbox as it is.
+# shows the mailbox as it is. That check compares the feed with itself, so the
+# change is also refused when the feed and mail don't count the same number of
+# messages: then their positions don't line up either.
 #
 # The change itself is made by mail, not by editing the file, and with the
 # mailbox opened as the system mailbox ($MAIL), not as a file (-f): only then
@@ -24,6 +26,8 @@
 # Status: header gets an R), and `unread` clears it again. `set hold` keeps
 # what mail does not delete where it is in the mailbox rather than moving read
 # messages to ~/mbox, which is what quitting the system mailbox does otherwise.
+# MAILRC=/dev/null keeps the user's own mail settings out of it: with
+# autoprint, say, a delete would print the next message too, marking it read.
 set -eu
 
 action=${1:?usage: tmux-mail-action toggle|delete <line>}
@@ -47,6 +51,15 @@ if [ "$isStale" = true ]; then
   exit 1
 fi
 
+# mail's count, from the header line of its last message ("$"). -f only reads
+# here: x quits without writing anything back. An empty mailbox prints no
+# header line, so counts as 0.
+count=$(printf 'from $\nx\n' | MAILRC=/dev/null mail -N -n -f "$mbox" 2>/dev/null |
+  awk '{ sub(/^>/, ""); for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+$/) { print $i; exit } }')
+if [ "${count:-0}" != "$("$feed" | wc -l | tr -d ' ')" ]; then
+  exit 1
+fi
+
 case $action in
   toggle)
     if [ "$state" = U ]; then
@@ -63,4 +76,4 @@ case $action in
 esac
 
 # type prints the message; it is only being used for what it records.
-printf 'set hold\n%s\nquit\n' "$command" | MAIL="$mbox" mail -N -n >/dev/null 2>&1
+printf 'set hold\n%s\nquit\n' "$command" | MAILRC=/dev/null MAIL="$mbox" mail -N -n >/dev/null 2>&1
