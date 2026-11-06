@@ -8,6 +8,7 @@ ESC=$(printf '\033')
 
 setup() {
   export MAIL="$BATS_TEST_TMPDIR/mbox"
+  export TMPDIR="$BATS_TEST_TMPDIR"
   export TMUX_MAIL_POLL_STAMP="$BATS_TEST_TMPDIR/stamp"
   export MOCK_DIR="$BATS_TEST_TMPDIR/mock"
   mkdir -p "$MOCK_DIR/bin"
@@ -70,6 +71,26 @@ plain() { sed "s/$ESC\[[0-9;]*m//g"; }
   [[ "$output" == reload-sync* ]]
 }
 
+@test "--poll reloads for a same-size change, by its modification time" {
+  run "$SCRIPT" --poll
+  sed 's/older/olden/' "$MAIL" > "$MAIL.new"
+  mv "$MAIL.new" "$MAIL"
+  touch -t 203001010000 "$MAIL"
+  run "$SCRIPT" --poll
+  [[ "$output" == reload-sync* ]]
+}
+
+@test "--act re-renders the footer with --force, so its own change always shows" {
+  line="x${US}$("$FEED" | sed -n 1p)"
+  # A run first, so the footer's own check has seen this mailbox: the fake mail
+  # changes nothing, so only --force makes the run inside --act parse again.
+  "$BATS_TEST_DIRNAME/tmux-mail-status"
+  : > "$MOCK_DIR/tmux-calls"
+  run "$SCRIPT" --act toggle "$line"
+  [ "$status" -eq 0 ]
+  grep -q '^set-option -g @mail ' "$MOCK_DIR/tmux-calls"
+}
+
 @test "--poll leaves the list alone while someone is typing" {
   FZF_IDLE_TIME_MS=100 run "$SCRIPT" --poll
   [ "$output" = ignore ]
@@ -98,5 +119,5 @@ plain() { sed "s/$ESC\[[0-9;]*m//g"; }
   line="x${US}$("$FEED" | sed -n 1p)"
   run "$SCRIPT" --act toggle "$line"
   [ "$status" -eq 0 ]
-  if grep -q '^display-message' "$MOCK_DIR/tmux-calls" 2>/dev/null; then false; fi
+  if grep -q 'nothing done' "$MOCK_DIR/tmux-calls" 2>/dev/null; then false; fi
 }
